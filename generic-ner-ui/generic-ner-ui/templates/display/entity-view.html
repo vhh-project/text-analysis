@@ -1,0 +1,14 @@
+<div class="col">
+    <ul class="list-group">
+        {% for group in page.ner.entity_groups %}
+        <li class="list-group-item">
+            {% if group.name %}
+            <h3 class="list-group-item-heading">{{ group.name }}</h3>
+            {% endif %}
+            {% for entity in group.entities %}
+            <p class="list-group-item">{{ entity.type }}: {{ entity.value }}</p>
+            {% endfor %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>

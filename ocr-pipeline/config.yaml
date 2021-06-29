@@ -1,0 +1,11 @@
+config:
+  pipeline:
+    dev: "False"
+    N_CPU: "4"
+    RESULT_DIR: ""
+    DATA_DIR: ""
+  amqp:
+    url: "amqp://amqp_user:amqp_pass@localhost:5672/nerui?heartbeat=30"
+    inqueue: "ocr_pipeline"
+  minio:
+    host: "localhost"

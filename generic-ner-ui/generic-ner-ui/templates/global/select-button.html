@@ -1,0 +1,5 @@
+{% load icons %}
+
+<button class="btn btn-primary{% if selector == view %} active{% endif %}" data-toggle="tooltip" data-placement="top" title="{{ title }}"
+        onclick="location.href='{{ url }}';">{% if icon_name %}{% icon icon_name %}{% else %}{{ title }}{% endif %}
+</button>

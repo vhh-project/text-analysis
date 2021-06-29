@@ -1,0 +1,8 @@
+.git
+generic-ner-ui/staticfiles
+.idea
+*/.mypy_cache
+*/.pytest_cache
+*/generic_ner_ui.egg-info
+**/__pycache__
+**/migrations

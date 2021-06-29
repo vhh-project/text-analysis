@@ -1,0 +1,35 @@
+<div class="col">
+    
+    <span>
+        {% for entry3 in page.ner.entries %}
+
+            <!-- dont show removed boxes -->
+            {% if entry3.method != "remove" %}
+
+                <!-- show normal ocr text if no human correction exists -->
+                {% if entry3.correction|length == 0 and not entry3.human_correction %}
+                    {{ entry3.text }}
+                {% elif entry3.human_correction %}
+                    <span class="underline-wavy-green plain-holder">{{ entry3.human_correction }}</span>
+                {% else %}
+                    <span class="underline-wavy-red plain-holder">{{ entry3.text }}
+                        <!-- <div class="correction-tooltip">{% for c in entry3.correction %}<span class="corr-entry">{{ c }}</span>{% endfor %}</div> -->
+                    </span>
+                {% endif %}
+            {% endif %}
+            
+        {% endfor %}
+    </span>
+
+    <hr>
+    <!-- show human added rows -->
+    <span>
+        {% for entry3 in page.ner.entries %}
+            {% if entry3.method != "remove" %}
+                {% if entry3.human_add %}
+                    {{ entry3.human_correction }}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+    </span>   
+</div>

@@ -1,0 +1,569 @@
+{% load icons %}
+
+
+<div class="container-fluid sticky-top" style="top: 64px;background: white;">
+    {% include "global/back.html" %}
+
+    <div style="display: flex;">
+        <h3>
+            Review <span style="color: gray;font-size: 20px;">{{ file_name }}</span>
+        </h3>
+        <span class="alert alert-success" style="margin-left: auto; margin-bottom: 0; padding: 7px; display: none;" id="info-alerts"></span>
+    </div>
+
+    
+    <!-- <span style="margin-left: auto; display: none;" id="review-state"></span> -->
+    
+    <div>
+        <span id="review-state"></span>
+    </div>
+    
+    <div class="btn-group">
+
+        {% if view == "ocr" %}
+        <span class="toolbar-btn info-holder" onclick="review_corrections(this)" id="review-control-btn">
+            <i class="fa fa-play-circle-o"></i>
+            <a>Start Review</a>
+            <div class="info-box">
+                <h4>Review-Mode Info</h4>
+                <span>* suggestion</span> <br>
+                <span>* remove</span> <br>
+                <span>* is ok</span> <br>
+                <span>* custom correction</span> <br>
+            </div>
+        </span> 
+        <span class="toolbar-btn info-holder" onclick="add_box(this.id)" id="add-box-btn" style="margin-left: 7px;">
+            <a><i class="fa fa-plus"></i> Add Box</a>
+            <div class="info-box">
+                <h4>Add Box Info</h4>
+                <span>* To create a new ocr box click on the desired img location and resize the field.</span> <br>
+                <span>* Box deletions can be done on the text view (left side).</span> <br>
+            </div>
+        </span> 
+        <span class="divider"></span>
+        {% endif %}
+
+        <span style="color: gray; padding: 5px; margin-right: 5px; cursor: default;">
+        View:
+        </span>
+
+        <a class="toolbar-btn{% if 'text' == view %} active{% endif %}"
+        href="{% url 'main:details' id=task_id view='text' %}" style="margin-right: 7px;">Plain Text
+        </a>
+
+        <a class="toolbar-btn{% if 'ocr' == view %} active{% endif %}"
+        href="{% url 'main:details' id=task_id view='ocr' %}">Exact Positions
+        </a>
+        
+        <span class="divider"></span>
+        <span class="toolbar-btn" onclick="expand_collapse()" id="exp-btn"><i class="fa fa-expand"></i> Expand</span>
+        <span class="toolbar-btn" onclick="expand_collapse()" style="display: none;" id="contract-btn"><i class="fa fa-compress"></i> Contract</span>
+        <span class="divider"></span>
+
+        <span style="color: gray; padding: 5px; margin-right: 5px; cursor: default;">
+            Download:
+        </span>
+
+        <a href="{% url 'main:download_pdf' id=task_id %}" download="{{ file_name }}_OCR.pdf" onclick="show_info_and_fade_out(4000, 'Generating <strong>PDF</srong>')" style="padding: 5px;color: #075071;margin-left:10px">
+            {% icon 'download' extra_classes='red-icon' %} OCR PDF
+        </a>
+
+        <a href="{% url 'main:download_original' id=task_id %}" download="{{ file_name_original }}"style="padding: 5px;color: #075071;margin-left:10px">
+            <i class="fa fa-download"></i> Original File
+        </a>
+        <a href="{% url 'main:download_data' %}?paths={{task_id}}" style="padding: 5px;color: #075071;margin-left:10px">
+            <i class="fa fa-file-archive-o"></i> All Data
+        </a>
+        <span class="divider"></span>
+        <span class="info-holder" style="padding: 5px;"><i class="fa fa-lightbulb-o"></i> Info
+        <div class="info-box">
+            <h4>Review-Info</h4>
+            <span class="underline-wavy-red ">A red underlined word</span> indicates a spellchecking suggestion is available <br>
+            <span class="underline-wavy-blue">A blue underlined word</span> indicates that the OCR model is unsure about the recognized word <i>(Note: The OCR model can be very sure and still be wrong)</i>
+        </div></span>
+    </div>
+</div>
+
+<div class="container" id="page-holder">    
+    {% for page in pages %}
+    <div class="row" style="position: relative;">
+        <span class="page-number">{{ forloop.counter }} </span><hr style="
+        border-top: 2px solid #075071;
+        right: 0;
+        position: absolute;
+        top: 7px;
+        z-index: 0;
+        left: 60px; " />
+    </div>
+    <div class="row" id="page-{{forloop.counter}}">
+        {% if view == "text" %}
+        {% include "display/text-view.html" with page=page p_number=forloop.counter %}
+        {% elif view == "ner" %}
+        {% include "display/entity-view.html" with page=page %}
+        {% elif view == "ocr" %}
+        {% include "display/ocr-view.html" with page=page p_number=forloop.counter %}
+        {% endif %}
+        {% include "display/document-view.html" with page=page p_number=forloop.counter view=view %}
+    </div>
+    {% endfor %}
+    {% if cut_off%}
+    <div style="color: gray; text-align: center;padding: 50px;">This preview only shows the first 50 pages; all downloads contain the full document.</span>
+    {% endif %}
+</div>
+
+
+<!-- ################################################################################################################ -->
+<!-- ################################################################################################################ -->
+<!-- ################################################################################################################ -->
+
+
+<script type="application/javascript">
+
+    const auto_correction_time = 3000
+    const review_pointer = 0;
+    
+    var corrections = []; // list of correction rows
+    var c_pointer = 0 // correction pointer to keep track of corrections already send to the backend
+    var correction_mode = false;
+
+    var all_tooltips = document.getElementsByClassName('correction-tooltip'); // all tooltips
+    var all_incorrect = $("span.inner-text-holder.underline-wavy-red"); // document box focus
+
+    {% if view == "ocr" %}
+        set_correction_info()
+    {% endif %}
+
+    var page_lengths_og = JSON.parse('{{ page_lengths }}') // original values for page entities count
+    var page_lengths_curr = JSON.parse('{{ page_lengths }}') // current state
+    var add_mode = false // whether a new box can be added
+
+    console.log("initial page length(s): ", page_lengths_curr, "\n------");    
+    
+    function show_info_and_fade_out(fade_time, text) {
+        $("#info-alerts").fadeIn(50)
+        $("#info-alerts").html(text)
+        $("#info-alerts").fadeOut(fade_time);
+    }
+
+    function add_box(){    
+        if (add_mode == false) {
+            add_mode = true
+            $("#add-box-btn").find("a").html('<i class="fa fa-minus"></i> Cancel');
+            $(".img-holder").addClass("pointer-hover");
+            $(".img-holder").find("span").addClass("light-color-box")
+        } else {
+            add_mode = false
+            $("#add-box-btn").find("a").html('<i class="fa fa-plus"></i> Add Box ');
+            $(".img-holder").removeClass("pointer-hover");
+            $(".img-holder").find("span").removeClass("light-color-box")
+        }
+    }
+
+    function drag_custom_box(target) {
+        target = document.getElementById(target)
+        new_element_id = target.getAttribute('id');
+
+        // px to percent
+        p_width = $(target).parent().width()
+        p_height = $(target).parent().height()
+        new_left = parseInt(target.style.left) * 100 / p_width;
+        new_top = parseInt(target.style.top) * 100 / p_height;
+
+        // update left & top style
+        $("#cust-box-"+new_element_id).css("left", new_left.toString() + "%");
+        $("#cust-box-"+new_element_id).css("top", new_top.toString() + "%");
+
+        // focus editable span field and content
+        ocr_box = $("#cust-box-"+new_element_id).find("span").first().get(0)
+        select_text_target(ocr_box)
+    }
+
+    function resize_custom_box(target){
+        target = document.getElementById(target)
+        
+        // change resized width & height to percentage values in img-holder
+        p_width = $(target).parent().width()
+        p_height = $(target).parent().height()
+
+        // update font size according to resized element
+        new_element_id = target.getAttribute('id');
+        $("#cust-box-"+new_element_id).css({
+                                            'font-size': (parseInt(target.style.height)/2) + 'px',
+                                            'line-height': parseInt(target.style.height) + 'px'
+                                        })
+
+        p_width = parseInt(target.style.width) * 100 / p_width;
+        p_height = parseInt(target.style.height) * 100 / p_height;
+        target.style.width = p_width.toString() + "%";
+        target.style.height = p_height.toString() + "%";
+
+        // resize corresponding element in ocr-holder
+        $("#cust-box-"+new_element_id).css("width", p_width.toString() + "%");
+        $("#cust-box-"+new_element_id).css("height", p_height.toString() + "%");
+
+        // focus editable span field and content
+        ocr_box = $("#cust-box-"+new_element_id).find("span").first().get(0)
+        select_text_target(ocr_box)
+    }
+
+    function select_text_target(target) {
+        var range = document.createRange();
+        range.selectNodeContents(target);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    $('.img-holder').click(function (e){ 
+        if (add_mode != true) {
+            return
+        }
+
+        // percentual click coordinates
+        var elm = $(this);
+        var p_xPos = (e.pageX - elm.offset().left) * 100 / elm.width();
+        var p_yPos = (e.pageY - elm.offset().top) * 100 / elm.height();
+
+        // create element ID (page_id + item_id)
+        page_id = parseInt($(elm).find("span:first").attr('id').split('-')[2])
+        new_element_id = "img-hover-"+page_id.toString()+"-"+page_lengths_curr[page_id-1].toString()+""
+        page_lengths_curr[page_id-1] += 1 
+
+        // create html elements
+        img_element = '<span class="doc-overlay cust-box" id="'+new_element_id+'" style="left: '+p_xPos+'%; top: '+p_yPos+'%; width: 6%; height: 3%;"></span>' // onmouseup="resize_custom_box(this);"
+        ocr_tooltip = '<div class="correction-tooltip-alt"><span class="corr-entry" onclick="remove_correction(this)"><i class="fa fa-ban" aria-hidden="true"></i> Remove</span></div>'
+        ocr_element = '<div class="outer-text-holder cust-box" id="cust-box-'+new_element_id+'" style="left: '+p_xPos+'%; top: '+p_yPos+'%; width: 6%; height: 3%;"> <span contenteditable="true" value="#'+new_element_id+'" spellcheck="false"> TEXT </span> '+ocr_tooltip+' </div>'
+
+        // append html elements
+        page_number = "#page-"+page_id.toString();
+        $(page_number).find('.img-holder').append(img_element); 
+        $(page_number).find('.ocr-holder').append(ocr_element); 
+        
+        // TODO: resizeable & dragable 
+        $("#"+new_element_id).resizable({
+            start: function(event, ui) {},
+            stop: function(event, ui) {
+                box_id = ui.helper.context.id
+                resize_custom_box(box_id)
+                // update w/h data here
+                var correction_data = build_correction_data("cust-box-"+box_id, "")
+                append_correction_data(new_element_id, correction_data, 'update_add')
+            }
+        });
+        $("#"+new_element_id).draggable({
+            start: function(event, ui) {},
+            stop: function(event, ui) {
+                box_id = ui.helper.context.id
+                drag_custom_box(ui.helper.context.id)
+                // update x/y data here
+                var correction_data = build_correction_data("cust-box-"+box_id, "")
+                append_correction_data(new_element_id, correction_data, 'update_add')
+            }
+        });
+
+        // focus editable span field and content
+        ocr_box = $("#cust-box-"+new_element_id).find("span").first().get(0)
+        select_text_target(ocr_box)
+
+        // switch add_mode state
+        add_box() 
+
+        // initial add box to DB
+        box_id = "cust-box-"+new_element_id
+        var correction_data = build_correction_data(box_id, "TEXT")
+        append_correction_data(new_element_id, correction_data, 'add')
+    });
+
+    // ------------------------------
+
+    // auto save corrections
+    function check_correction_updates(update_review_state) {
+        //console.log("* len:", corrections.length, "ptr:", c_pointer);
+
+        // no new corrections available
+        if (corrections.length <= c_pointer && update_review_state == false) {
+            setTimeout(check_correction_updates, auto_correction_time, false); 
+        } else {
+            var form = new FormData();
+            // select pointer to correction array position to send only new corrections
+            tmp_data = corrections.slice(c_pointer)
+            form.append('save-review', JSON.stringify(tmp_data));
+            form.append('task_id', "{{ task_id }}");
+            const url = "{% url 'main:update_human_corrections' %}";
+            const request = new XMLHttpRequest();
+
+            // backend response save success evaluation 
+            request.onreadystatechange = function () {
+                if (request.readyState == 4 && request.status == 200) {
+                    resp = JSON.parse(this.response)
+                    console.log("save:", corrections.length, ", success:", resp['success']);    
+                    if (resp['success'] == 1) {
+                        // update correction pointer
+                        if (tmp_data.length != 0) {
+                            show_info_and_fade_out(auto_correction_time, "<strong>last auto save</strong> " +  new Date().toLocaleTimeString())
+                            c_pointer = c_pointer + tmp_data.length
+                        }
+                    }
+                }
+            }
+            request.open("POST", url, true);
+            request.send(form);
+            setTimeout(check_correction_updates, auto_correction_time, false);
+        }
+    } 
+    setTimeout(check_correction_updates, 50, true);
+
+
+    // manual in-box human correction editing updates
+    $('.ocr-holder').on('focus', '[contenteditable]', function() {
+        const $this = $(this);
+        $this.data('before', $this.html());
+    }).on('blur', '[contenteditable]', function() { // "blur keyup paste input" -> on every key change
+        const $this = $(this);
+        var correction = $this.html()
+        if ($this.data('before') !== correction) {
+            $this.data('before', $this.html());
+            $this.trigger('change');
+            $(this).removeClass("underline-wavy-red");
+            $(this).removeClass("underline-wavy-blue");
+            $(this).addClass("underline-wavy-green");
+            id = $(this).attr('value')
+            append_correction_data(id, correction, 'update')
+        }
+    });
+
+    // build data of text/box-geometrics for backend
+    function build_correction_data(box_id, correction) {
+        el = document.getElementById(box_id)
+        box_width = parseFloat(el.style.width);
+        box_height = parseFloat(el.style.height);
+        box_top = parseFloat(el.style.top);
+        box_left = parseFloat(el.style.left);
+        var correction_data = {
+            "text":     correction,
+            "width":    box_width,
+            "height":   box_height,
+            "top":      box_top, 
+            "left":     box_left 
+        };
+        return correction_data
+    }
+
+    // tooltip custom correction inputfield
+    function custom_correction(target) {
+        id = $(target).parent().parent().parent().find("span:first").attr('value')
+        correction = $(target.parentElement).find("input").get(0).value;
+        $(target).parent().parent().parent().get(0).firstElementChild.innerText = correction // replace text
+        $(target).parent().parent().parent().get(0).firstElementChild.classList.remove("underline-wavy-red") // remove red line
+        $(target).parent().parent().parent().get(0).firstElementChild.classList.add("underline-wavy-green") // add green line
+        $(target).parent().parent().get(0).remove(); // remove tooltip corrections
+
+        append_correction_data(id, correction, 'update')
+        if (correction_mode==true) {
+            iterate_correction()
+        }
+    }
+
+    // tooltip suggestion selection
+    function select_correction(target) {
+        id = $(target).parent().parent().find("span:first").attr('value')
+        correction = target.innerText
+        $(target).parent().parent().get(0).firstElementChild.innerText = correction // replace text
+        $(target).parent().parent().get(0).firstElementChild.classList.remove("underline-wavy-red") // remove red line
+        $(target).parent().parent().get(0).firstElementChild.classList.add("underline-wavy-green") // add green line
+        $(target).parent().get(0).remove(); // remove tooltip corrections
+
+        append_correction_data(id, correction, 'update')
+        if (correction_mode==true) {
+            iterate_correction()
+        }
+    }
+
+    // tooltip skip correction selection
+    function skip_correction(target) {
+        id = $(target).parent().parent().find("span:first").attr('value')
+        correction = $(target).parent().parent().get(0).firstElementChild.innerText
+        $(target).parent().parent().get(0).firstElementChild.classList.remove("underline-wavy-red") // remove red line
+        $(target).parent().parent().get(0).firstElementChild.classList.add("underline-wavy-green") // add green line
+        $(target).parent().get(0).remove(); // remove tooltip corrections
+
+        append_correction_data(id, correction, 'update')
+        if (correction_mode==true) {
+            iterate_correction()
+        }
+    }
+
+    // remove on ocr & img holder
+    function remove_correction(target) {
+        id = $(target).parent().parent().find("span:first").attr('value')
+        $(target).parent().parent().get(0).remove(); // remove ocr-holder
+        $(id).get(0).remove() // remove img-holder
+
+        append_correction_data(id, '', 'remove')
+        if (correction_mode==true) {
+            iterate_correction()
+        }
+    }
+
+    function append_correction_data(id, correction, method) {
+        console.log(">", method, id);
+        split_id = id.split('-')
+        corrections.push({
+            row: parseInt(split_id[3]),
+            page: parseInt(split_id[2])-1,
+            value: correction,
+            method: method,
+        });
+    }
+
+    function iterate_correction() {
+        // update correction counter state
+        res = set_correction_info()
+        if (res==true) {return}
+
+        // remove old document box focus
+        $(all_incorrect[review_pointer].getAttribute("value")).removeClass('active')
+        
+        // focus next tooltip
+        all_tooltips[review_pointer].style.display = 'inline-block';
+
+        // focus next document box
+        all_incorrect = $("span.inner-text-holder.underline-wavy-red"); 
+        $(all_incorrect[review_pointer].getAttribute("value")).addClass('active')
+    }
+
+    function set_correction_info(){
+        if (all_tooltips.length == 0) {
+            document.getElementById("review-state").innerHTML = "All errors resolved!"
+            $("#review-control-btn").html("<i class='fa fa-check'></i> Review Complete!");
+            return true
+        } else {
+            document.getElementById("review-state").innerHTML = "We found " + all_tooltips.length + " possible errors to be reviewed."
+            return false
+        }
+    }
+
+    function review_corrections(id){
+        if (all_tooltips.length == 0) {return}
+        $(id).toggleClass('active')
+
+        all_incorrect = $("span.inner-text-holder.underline-wavy-red");
+        state = $("#review-control-btn").find("a").html()
+        
+        if (state=="Start Review"){
+            correction_mode = true
+            set_correction_info()
+            $("#review-control-btn").find('i').removeClass("fa fa-play-circle-o")
+            $("#review-control-btn").find('i').addClass("fa fa-pause-circle-o")
+            
+            $("#review-control-btn").find("a").html("Stop Review")
+            all_tooltips[review_pointer].style.display = 'inline-block';
+            $(all_incorrect[review_pointer].getAttribute("value")).addClass('active')
+        } else if (state=="Stop Review"){
+            correction_mode = false
+            $("#review-control-btn").find('i').removeClass("fa fa-pause-circle-o")
+            $("#review-control-btn").find('i').addClass("fa fa-play-circle-o")
+            $("#review-control-btn").find("a").html("Start Review")
+            all_tooltips[review_pointer].style.display = '';
+            $(all_incorrect[review_pointer].getAttribute("value")).removeClass('active')
+        }
+
+        
+
+    }
+
+// ################################################################################################################
+
+expand_collapse()
+
+function expand_collapse(){
+    if($("#page-holder").hasClass("container")){
+        $("#page-holder").removeClass("container").addClass("container-fluid")
+    }else{
+        $("#page-holder").removeClass("container-fluid").addClass("container")
+    }
+    $("#exp-btn").toggle()
+    $("#contract-btn").toggle()
+
+    {% if view == "ocr" %}      
+    resize_ocr_text()
+    {% endif %}
+}
+{% if view == "ocr" %}      
+function resize_ocr_text(){
+    set_fs = []
+    all_el = $(".ocr-holder .outer-text-holder")
+    all_el.each((i,el)=>{
+        outer_box = el.getBoundingClientRect()
+        inner_box = el.querySelector(".inner-text-holder").getBoundingClientRect()
+
+        cs = window.getComputedStyle(el.querySelector(".inner-text-holder"))
+        curr_fs = cs.getPropertyValue('font-size').slice(0, -2) 
+
+        ratio_h = outer_box.height / inner_box.height
+        ratio_w = outer_box.width / inner_box.width
+        new_fs = Math.round(curr_fs * Math.min(ratio_h,ratio_w) *10)/10
+        set_fs.push(new_fs)
+        //el.querySelector(".inner-text-holder").style.fontSize = new_fs + "px"
+//
+        //inner_box = el.querySelector(".inner-text-holder").getBoundingClientRect()
+        //if (outer_box.width < inner_box.width){
+        //    ratio = outer_box.width / inner_box.width
+        //    new_fs = new_fs * ratio
+        //    el.querySelector(".inner-text-holder").style.fontSize = new_fs + "px"
+        //}/*else{
+        //    curr_ls = cs.getPropertyValue('letter-spacing').slice(0, -2)
+        //    if(curr_ls == "norm"){
+        //        curr_ls = 0
+        //    }
+        //    remaining_width = outer_box.width - inner_box.width
+        //    new_ls = curr_ls + (remaining_width / (el.querySelector(".inner-text-holder").textContent.length))
+        //    el.querySelector(".inner-text-holder").style.letterSpacing = new_ls + "px"
+        //}*/
+
+        //console.log(outer_box,inner_box,curr_fs,new_fs)
+
+    })
+    all_el.each((i,el)=>{
+        //outer_box = el.getBoundingClientRect()
+        //inner_box = el.querySelector(".inner-text-holder").getBoundingClientRect()
+//
+        //cs = window.getComputedStyle(el.querySelector(".inner-text-holder"))
+        //curr_fs = cs.getPropertyValue('font-size').slice(0, -2) 
+//
+        //ratio = outer_box.height / inner_box.height
+        //new_fs = curr_fs * ratio
+        el.querySelector(".inner-text-holder").style.fontSize = set_fs[i] + "px"
+
+        //inner_box = el.querySelector(".inner-text-holder").getBoundingClientRect()
+        //if (outer_box.width < inner_box.width){
+        //    ratio = outer_box.width / inner_box.width
+        //    new_fs = new_fs * ratio
+        //    el.querySelector(".inner-text-holder").style.fontSize = new_fs + "px"
+        //}/*else{
+        //    curr_ls = cs.getPropertyValue('letter-spacing').slice(0, -2)
+        //    if(curr_ls == "norm"){
+        //        curr_ls = 0
+        //    }
+        //    remaining_width = outer_box.width - inner_box.width
+        //    new_ls = curr_ls + (remaining_width / (el.querySelector(".inner-text-holder").textContent.length))
+        //    el.querySelector(".inner-text-holder").style.letterSpacing = new_ls + "px"
+        //}*/
+
+        //console.log(outer_box,inner_box,curr_fs,new_fs)
+
+    })
+}
+resize_ocr_text()
+function debounce(func){
+  var timer;
+  return function(event){
+    if(timer) clearTimeout(timer);
+    timer = setTimeout(func,100,event);
+  };
+}
+window.addEventListener("resize",debounce(function(e){
+    resize_ocr_text()
+}));
+{% endif %}
+</script>

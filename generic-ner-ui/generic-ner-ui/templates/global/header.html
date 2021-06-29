@@ -1,0 +1,22 @@
+{% load icons %}
+{% load save_static %}
+<nav class="navbar navbar-default fixed-top">
+    <div class="container">
+        <div class="navbar-header">
+            <img src="{% save_static 'img/tu_schwarz.gif' %}" class="icon">
+            <h1 class="navbar-brand">BOW</h1>
+            <h4 class="navbar-brand2">Batch OCR Webservice</h4>
+        </div>
+        <div>
+        {% if upload %}
+        {% include "global/upload.html" %}
+        {% endif %}
+        <span class="user-name">Hello {{ request.user }} <a href="{{ logout_url}}{% filter urlencode %}{{ request.scheme }}://{{ request.get_host }}{% url 'logout' %}{% endfilter %}">(Logout)</a></span>
+        </div>
+        <script type="application/javascript">
+            $(function () {
+                $('[data-toggle="tooltip"]').tooltip({"html":true})
+            });
+        </script>
+    </div>
+</nav>

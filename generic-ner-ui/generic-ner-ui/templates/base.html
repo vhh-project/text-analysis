@@ -1,0 +1,25 @@
+{% load save_static %}
+<html lang="en">
+<head>
+    <title>BOW - Batch OCR Webservice</title>
+    <link rel="shortcut icon" type="image/x-icon" href="{% save_static 'img/favicon.ico' %}"/>
+    <meta charset="utf-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    {% load bootstrap4 %}
+
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"
+          rel="stylesheet"
+          integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN"
+          crossorigin="anonymous"
+    >
+
+    {% bootstrap_javascript jquery="True" %}
+    {% bootstrap_css %}
+    <link href="{% save_static 'css/style.css' %}" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+{% include "global/header.html" with upload="True" %}
+{% include "main-page/pipeline-status.html" %}
+</body>
+</html>

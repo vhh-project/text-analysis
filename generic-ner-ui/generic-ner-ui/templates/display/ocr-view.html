@@ -1,0 +1,55 @@
+<div class="col ocr-holder">
+    <svg width="100%" style="height:inherit" viewBox="0 0 {{ page.preprocessing.width }} {{ page.preprocessing.height }}"></svg>
+    {% for entry in page.ner.entries %}
+    
+    {% if entry.method != "remove" %}
+        <!-- OCR text holder -->
+        <div class="outer-text-holder" style="left:{{ entry.left_norm }}%;
+                                                top:{{ entry.top_norm }}%;
+                                                width:{{ entry.width_norm }}%;
+                                                height:{{ entry.height_norm }}%;">
+        {% if entry.method == "update" or entry.method == "add" %}
+            <span spellcheck="false" contenteditable value="#img-hover-{{p_number}}-{{forloop.counter0}}" onmouseover="$('#img-hover-{{p_number}}-{{forloop.counter0}}').addClass('active')" onmouseout="$('#img-hover-{{p_number}}-{{forloop.counter0}}').removeClass('active')" class="inner-text-holder underline-wavy-green">{{ entry.human_correction }}</span>
+        {% else %}
+            <span spellcheck="false" contenteditable value="#img-hover-{{p_number}}-{{forloop.counter0}}" onmouseover="$('#img-hover-{{p_number}}-{{forloop.counter0}}').addClass('active')" onmouseout="$('#img-hover-{{p_number}}-{{forloop.counter0}}').removeClass('active')" class="inner-text-holder {% if entry.correction|length > 0 %} underline-wavy-red{% elif entry.conf < 60 %} underline-wavy-blue{% endif %}">{{ entry.text }}</span>
+        {% endif %}
+
+        <!-- correction hover tooptip -->
+        {% if entry.method != "update" and entry.method != "add" and entry.correction|length > 0 %} 
+            <div class="correction-tooltip">
+                {% for c in entry.correction %}
+                    <span class="corr-entry" onclick="select_correction(this)">{{ c }}</span>
+                {% endfor %}
+                <hr>
+                <div class="flex">
+                    <input value="{{ entry.text }}">
+                    <span class="toolbar-btn" onclick="custom_correction(this)" id="contract-btn">
+                        <i class="fa fa-check"></i>
+                    </span>
+                </div>
+                <hr>
+                <span class="corr-entry" style="float: left; width: 50%;" onclick="skip_correction(this)">
+                    <i class="fa fa-arrow-right" aria-hidden="true"></i> Is Ok
+                </span>
+                <span class="corr-entry" style="float: right; width: 50%" onclick="remove_correction(this)">
+                    <i class="fa fa-ban" aria-hidden="true"></i> Remove
+                </span>
+            </div>
+        {% elif entry.conf < 60 and not entry.human_correction  %}
+            <div class="correction-tooltip-alt" style="float:left;">
+                <span class="corr-entry" style="display:inline;" onclick="skip_correction(this)">
+                    <i class="fa fa-arrow-right" aria-hidden="true"></i> Is Ok
+                </span>
+                <span class="corr-entry" style="display:inline;" onclick="remove_correction(this)">
+                    <i class="fa fa-ban" aria-hidden="true"></i> Remove
+                </span>
+            </div>
+        {% else %}
+            <div class="correction-tooltip-alt">
+                <span class="corr-entry" onclick="remove_correction(this)"><i class="fa fa-ban" aria-hidden="true"></i> Remove</span>
+            </div>
+        {% endif %}
+        </div>
+    {% endif %}
+    {% endfor %}
+</div>

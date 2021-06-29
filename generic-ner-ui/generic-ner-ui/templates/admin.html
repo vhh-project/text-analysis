@@ -1,0 +1,200 @@
+{% load save_static %}
+<html lang="en">
+<head>
+    <title>BOW - Batch OCR Webservice</title>
+    <link rel="shortcut icon" type="image/x-icon" href="{% save_static 'img/favicon.ico' %}"/>
+    <meta charset="utf-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    {% load bootstrap4 %}
+
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"
+          rel="stylesheet"
+          integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN"
+          crossorigin="anonymous"
+    >
+
+    {% bootstrap_javascript jquery="True" %}
+    {% bootstrap_css %}
+    <link href="{% save_static 'css/style.css' %}" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+{% include "global/header.html" with upload="True" %}
+{% load icons %}
+{% load save_static %}
+{% load tz %}
+
+{% localtime on %}
+
+<div class="container">
+    <h3 style="margin-bottom: 30px; margin-top: 30px;">Admin Console</h3>    
+</div>
+<div class="container">
+    <h4 style="margin-bottom: 30px; margin-top: 30px;">Errors</h4>
+    <table class="table">
+        <tr>
+            <th scope="col">Task-Id</th>
+            <th scope="col">User</th>
+            <th scope="col">File</th>
+            <th scope="col">Uploaded</th>
+            <th scope="col">Lang.</th>
+            <th scope="col">Error</th>
+            <th scope="col"></th>
+        </tr>
+        {% for run in error_runs %}
+        <tr style="font-size: 14px;">
+            <td scope="row">{{ run.task_id }}</td>
+            <td scope="row">{{ run.user_id }}</td>
+            <td scope="row">{{ run.file_name }}</td>
+            <td scope="row" style="width: 100px;">{{ run.upload_date|date:'Y-m-d' }}</td>
+            <td scope="row" style="width: 50px;">{{ run.lang }}</td>
+            <td scope="row" style="width: 100px;" id="status-col-{{run.task_id}}">
+                {{ run.error }}
+            </td>
+            <td scope="row" style="width: 100px;text-align: right;">
+                <a href="{% url 'main:download_original' id=run.task_id %}" download="{{ run.file_name }}"style="padding: 5px;color: #075071;margin-left:10px">
+                    <i class="fa fa-download"></i> Original File
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+<div class="container">
+    <h4 style="margin-bottom: 30px; margin-top: 30px;">User Stats</h4>
+    <table class="table">
+        <tr>
+            <th scope="col">User</th>
+            <th scope="col">Files</th>
+            <th scope="col">Errors</th>
+            <th scope="col">Pages</th>
+            <th scope="col">Queued</th>
+            <th scope="col">Processing</th>
+        </tr>
+        {% for user,stats in user_stats.items %}
+        <tr>
+            <td scope="row">{{ user }}</td>
+            <td scope="row">{{ stats.1 }}</td>
+            <td scope="row">{{ stats.0 }}</td>
+            <td scope="row">{{ stats.2 }}</td>
+            <td scope="row">{{ stats.3 }}</td>
+            <td scope="row">{{ stats.4 }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+
+<div class="container">
+    <h4 style="margin-bottom: 30px; margin-top: 30px;">Review Stats</h4>
+    <table class="table">
+        <tr>
+            <th scope="col">File</th>
+            <td class="table_line"></td>
+
+            <th scope="col">Text Length</th>
+            <td class="table_line"></td>
+
+            <th scope="col">Operations</th>
+            <th scope="col"></th>
+            <th scope="col"></th>
+
+            <td class="table_line"></td>
+            <th scope="col">Guided Review</th>
+            <th scope="col"></th>
+
+            <td class="table_line"></td>
+            <th scope="col">Human Corrections</th>
+            <th scope="col"></th>
+            <th scope="col"></th>
+            <th scope="col"></th>
+        </tr>
+        
+        <tr>
+            <th scope="col"></th>
+            <td class="table_line"></td>
+
+            <th scope="col"></th>
+            <td class="table_line"></td>
+
+            <th scope="col">add</th>
+            <th scope="col">remove</th>
+            <th scope="col">update</th>
+
+            <td class="table_line"></td>
+            <th scope="col">open</th>
+            <th scope="col">reviewed</th>
+            
+            <td class="table_line"></td>    
+            <th scope="col">manual</th>
+            <th scope="col">suggestion</th>
+            <th scope="col">is_ok</th>
+            <th scope="col">remove</th>
+        </tr>
+
+        {% for key, values in correction_stats.items %}
+        <tr >
+            <td scope="row">{{ key }}</td>
+            <td class="table_line"></td>
+            <td class="floatme-right" scope="row">{{ values.text_len|default_if_none:"--" }}</td>
+
+            <td class="table_line"></td>
+            <td class="floatme-right" scope="row">{{ values.operation_add|default_if_none:"--" }}</td>
+            <td class="floatme-right table_line" scope="row">{{ values.operation_remove|default_if_none:"--" }}</td>
+            <td class="floatme-right table_line" scope="row">{{ values.operation_update|default_if_none:"--" }}</td>
+
+            <td class="table_line"></td>
+            <td class="floatme-right" scope="row">{{ values.corrections_left|default_if_none:"--" }}</td>
+            <td class="floatme-right table_line" scope="row">{{ values.corrections_reviewed|default_if_none:"--" }}</td>
+            
+            <td class="table_line"></td>
+            <td class="floatme-right" scope="row">{{ values.c_correction_manual | default_if_none:"--" }}%</td>
+            <td class="floatme-right" scope="row">{{ values.c_correction_accept_suggestion | default_if_none:"--" }}%</td>
+            <td class="floatme-right" scope="row">{{ values.c_correction_is_ok | default_if_none:"--" }}%</td>
+            <td class="floatme-right" scope="row">{{ values.c_correction_removed | default_if_none:"--" }}%</td> <!--|add:"%"-->
+        </tr>                
+        {% endfor %}
+
+        <!-- summative metrics -->
+        <tr>
+            <th scope="col">Sum</th>
+            <td class="table_line"></td>
+            <th class="floatme-right" scope="col">{{ correction_stats_sum.text_len }}</th>
+            <td class="table_line"></td>
+            <th class="floatme-right" scope="col">{{ correction_stats_sum.operation_add }}</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_sum.operation_remove }}</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_sum.operation_update }}</th>
+            <td class="table_line"></td>
+            <th class="floatme-right" scope="col">{{ correction_stats_sum.corrections_left }}</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_sum.corrections_reviewed }}</th>            
+            <td class="table_line"></td>    
+            <th class="floatme-right" scope="col"></th>
+            <th class="floatme-right" scope="col"></th>
+            <th class="floatme-right" scope="col"></th>
+            <th class="floatme-right" scope="col"></th>
+        </tr>
+        <tr>
+            <th scope="col">Mean</th>
+            <td class="table_line"></td>
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.text_len }}</th>
+            <td class="table_line"></td>
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.operation_add }}</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.operation_remove }}</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.operation_update }}</th>
+            <td class="table_line"></td>
+            <th class="floatme-right" scope="col"></th>
+            <th class="floatme-right" scope="col"></th>
+            <td class="table_line"></td>    
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.c_correction_manual }}%</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.c_correction_accept_suggestion }}%</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.c_correction_is_ok }}%</th>
+            <th class="floatme-right" scope="col">{{ correction_stats_mean.c_correction_removed }}%</th>
+        </tr>
+
+    </table>
+</div>
+
+
+{% endlocaltime %}
+</body>
+</html>

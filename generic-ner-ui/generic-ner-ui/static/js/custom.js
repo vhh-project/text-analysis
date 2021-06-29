@@ -1,0 +1,2 @@
+function custom_function() {
+}

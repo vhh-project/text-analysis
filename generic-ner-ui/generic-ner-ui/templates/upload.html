@@ -1,0 +1,331 @@
+{% load save_static %}
+{% load icons %}
+<html lang="en">
+
+<head>
+    <title>BOW - Batch OCR Webservice</title>
+    <link rel="shortcut icon" type="image/x-icon" href="{% save_static 'img/favicon.ico' %}"/>
+
+    <meta charset="utf-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    {% load bootstrap4 %}
+
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"
+        integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+
+    {% bootstrap_javascript jquery="True" %}
+    {% bootstrap_css %}
+    <link href="{% save_static 'css/style.css' %}" type="text/css" rel="stylesheet" />
+</head>
+
+<body>
+    {% include "global/header.html" %}
+    <div class="container">
+        {% include "global/back.html" %}
+    </div>
+    <div class="container" id="upload-info">
+        <h3 style="margin-bottom: 30px; margin-top: 0px;">Upload New Files</h3>
+
+        <h5>Metadata</h5>
+        <small class="form-text text-muted" style="margin-bottom: 20px;">Select and fill in the metadata before
+            uploading files.<br>
+            Once you select files the upload starts automatically.</small>
+        <div class="form-group row">
+            <label class="col-sm-3" for="custom-language-select">Document Language</label>
+            <div class="col-sm-4">
+                <select class="form-select" id="custom-language-select">
+                    <option selected value="ENG">English</option>
+                    <option value="DEU">German</option>
+                    <option value="FRAKTUR">German (Fraktur)</option>
+                    <option value="FRA">French</option>
+                    <option value="RU">Russian</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group row">
+            <label class="col-sm-3" for="bucket">Group Name</label>
+            <div class="col-sm-4">
+                <span style="display: inline-block;margin: 7px;cursor: pointer;">
+                {% for g in groups %}
+                    <span class="badge badge-primary" onclick="$('#bucket').val('{{g}}')">{{g}}</span>
+                {% endfor %}
+                </span>
+                <input id="bucket" class="form-control" type="text" placeholder="Unspecified">
+                <small class="form-text text-muted">Use a name to group multiple files in the overview. 
+                </small>
+            </div>
+        </div>
+        <hr />
+        <h5>Files</h5>
+        <small class="form-text text-muted" style="margin-bottom: 20px;">To start the upload you can either upload files
+            from your local computer or select files from OneDrive.<br>Allowed file types: .jpg, .png, .pdf, .arw, .dng</small>
+        <div class="row align-items-center">
+            <div class="col-sm">
+                <input id="file-input" class="custom-file-input" type="file" name="myFiles" multiple
+                    style="display:none" accept=".png,.jpg,.jpeg,.pdf,.dng,.arw">
+                <div class="dropzone" id="drop-zone">
+                    <span draggable="false" class="select-notice" style="margin-top: 30px;"><span class="inner">Drag and drop files here to
+                        start uploading them<br><br> or <br><br></span>
+                        <button class="btn btn-primary" id="file-button">Select Files to Upload</button>
+                    </span>
+                    <span draggable="false" class="drop-notice" style="margin-top: 60px;">Drop Files to Upload
+                        Them</span>
+                </div>
+            </div>
+            <div class="col-sm-1 text-muted" style="text-align: center;">
+                or
+            </div>
+            <div class="col-sm-4" style="text-align: center;">
+                <button style="display: inline-block;" class="btn btn-primary" onClick="launchOneDrivePicker()"
+                    data-toggle="tooltip" data-placement="top" title=""
+                    data-original-title="Click here to upload files directly from OneDrive">Select Files from OneDrive
+                    <i style="margin-left:5px;" class="fa fa-cloud"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+    <div class="container" id="upload-status" style="display: none">
+        <h3 style="margin-bottom: 10px; margin-top: 30px;">Upload Progress</h3>
+        <small class="form-text text-muted" style="margin-bottom: 20px;">We are currently uploading your files. Do not
+            close this browser window until the upload is finished.</small>
+        <div class="no-bullets" id="file-status"></div>
+    </div>
+    <template id="temp-progress">
+        <div class="row align-items-center">
+            <span class="file-name col-sm-5"></span>
+            <div class="col-sm-4">
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                </div>
+                <div class="error-msg"></div>
+            </div>
+        </div>
+        <hr />
+    </template>
+    <template id="temp-onedirve">
+        <div class="row align-items-center">
+            <span class="file-name col-sm-5"></span>
+            <div class="col-sm-4">
+                <div class="msg">
+                    <span>Moving from OneDrive ...</span>
+                </div>
+                <div class="error-msg"></div>
+            </div>
+        </div>
+        <hr />
+    </template>
+</body>
+
+</html>
+<script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
+<script type="application/javascript">
+    let processing = false;
+
+    function startUpload(filesData) {
+        const languageSelect = document.getElementById("custom-language-select");
+        const groupName = document.getElementById("bucket");
+        const url = "{% url 'main:upload' %}";
+
+        document.getElementById("back-button").style.display = "none"
+        document.getElementById("upload-info").style.display = "none"
+        document.getElementById("upload-status").style.display = "block"
+
+        postSingle(filesData, url, languageSelect.value, groupName.value, undefined);
+    }
+
+    function postFiles(files) {
+        const filesArray = [];
+        for (const file of files) {
+            filesArray.push({
+                "mode": "file",
+                "data": file,
+                "name": file.name
+            });
+        }
+        startUpload(filesArray);
+    }
+
+    function postOneDriveFiles(files) {
+        const filesArray = [];
+        for (const item of files.value) {
+            filesArray.push({
+                "mode": "url",
+                "data": item["@microsoft.graph.downloadUrl"],
+                "name": item.name
+            });
+        }
+        startUpload(filesArray);
+    }
+
+    function postSingle(files, url, language, bucket, responseUrl) {
+        processing = true;
+        const file = files.shift();
+        const data = new FormData();
+        if (file.mode == "url") {
+            data.set(file.mode, file.data);
+        }
+        else {
+            data.set(file.mode, file.data, file.name);
+        }
+        data.set("name", file.name);
+        data.set("language", language);
+        data.set("bucket", bucket);
+
+        console.log("start upload: " + file.name);
+        if (file.mode == "file") {
+            var template = document.querySelector('#temp-progress');
+        }
+        else {
+            var template = document.querySelector('#temp-onedirve');
+        }
+        var clone = template.content.cloneNode(true);
+        clone.querySelector(".file-name").textContent = file.name
+        const statusList = document.getElementById("file-status");
+        statusList.prepend(clone)
+        currentProgressEl = statusList.firstElementChild
+
+
+
+        const request = new XMLHttpRequest();
+        hasError = false
+        request.onreadystatechange = function () {
+            if (this.readyState === 4) {
+                if (this.status === 200) {
+                    console.log("successfully uploaded: " + file.name);
+                    if (file.mode == "file") {
+                        currentProgressEl.querySelector(".progress-bar").textContent = "Done Uploading"
+                        currentProgressEl.querySelector(".progress-bar").style.width = "100%"
+                    } else {
+                        currentProgressEl.querySelector(".msg").textContent = "Done Moving!"
+                    }
+                } else {
+                    hasError=true
+                    currentProgressEl.querySelector(".error-msg").textContent = "Error: " + this.response
+                    if (file.mode == "file") {
+                        currentProgressEl.querySelector(".progress-bar").style.display = "none"
+                    } else {
+                        currentProgressEl.querySelector(".msg").style.display = "none"
+                    }
+                    console.log("error uploading: " + file.name + ", error: " + this.response);
+                }
+                if (files.length === 0) {
+                    processing = false;
+                    if (!hasError) {
+                        window.location = "{% url 'main:base' %}";
+                    }
+                } else {
+                    postSingle(files, url, language, bucket, responseUrl);
+                }
+
+            }
+        };
+        if (file.mode == "file") {
+            request.upload.onprogress = (event) => {
+                // event.loaded returns how many bytes are downloaded
+                // event.total returns the total number of bytes
+                // event.total is only available if server sends `Content-Length` header
+                console.log(`Uploaded ${event.loaded} of ${event.total} bytes`);
+                currentProgressEl.querySelector(".progress-bar").textContent = Math.round(event.loaded / event.total * 100) + "%"
+                currentProgressEl.querySelector(".progress-bar").style.width = Math.round(event.loaded / event.total * 100) + "%"
+            }
+        }
+        request.open("POST", url, true);
+        request.send(data);
+    }
+
+    function launchOneDrivePicker() {
+        const odOptions = {
+            clientId: "{{ onedrive_id }}",
+            action: "download",
+            multiSelect: true,
+            advanced: {},
+            success: postOneDriveFiles,
+            cancel: function () {
+                processing = false;
+            },
+            error: function (error) {
+                const statusList = document.getElementById("upload-status");
+                const statusElement = document.createElement("li");
+                statusElement.innerText = "error using onedrive picker: " + error;
+                console.log("error using onedrive picker: " + error);
+                statusList.style.display = 'block';
+                statusList.appendChild(statusElement);
+                processing = false;
+            }
+        };
+        OneDrive.open(odOptions);
+        processing = true;
+    }
+
+    window.onbeforeunload = function (e) {
+        if (!processing) {
+            return;
+        }
+
+        const message = "Files are currently uploading, do you want to cancel?";
+        e = e || window.event;
+        // For IE and Firefox
+        if (e) {
+            e.returnValue = message;
+        }
+
+        // For Safari
+        return message;
+    };
+
+    const fileSelect = document.getElementById("file-input");
+    const fileElem = document.getElementById("file-button");
+
+    fileElem.addEventListener("click", function (e) {
+        fileSelect.click();
+    }, false);
+    fileSelect.addEventListener("change", function (e) {
+        postFiles(this.files);
+    }, false);
+
+    //
+    // dropzone
+    //
+    // ************************ Drag and drop ***************** //
+    let dropArea = document.getElementById("drop-zone");
+
+        // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop area when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false)
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false)
+    });
+
+    // Handle dropped files
+    dropArea.addEventListener('drop', handleDrop, false);
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight(e) {
+        dropArea.classList.add('highlight')
+    }
+
+    function unhighlight(e) {
+        dropArea.classList.remove('highlight')
+    }
+
+    function handleDrop(e) {
+        var dt = e.dataTransfer;
+        var files = dt.files;
+
+        postFiles(files)
+    }
+</script>

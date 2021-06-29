@@ -1,0 +1,11 @@
+<div class="col position-col img-holder">
+    <img src="{% url 'main:image' id=task_id page=forloop.counter0 %}" width="100%"
+         style="display: block"/>
+    {% if view == "ocr" %}
+    {% for entry in page.ner.entries %}
+    {% if entry.method != "remove" %}
+    <span id="img-hover-{{p_number}}-{{forloop.counter0}}" class="doc-overlay" style="left:{{ entry.left_norm }}%;top:{{ entry.top_norm }}%;width:{{ entry.width_norm }}%;height:{{ entry.height_norm }}%;"></span>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+</div>

@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  requirements-staging:
+    build:
+      context: ../
+      dockerfile: requirements_freeze/Dockerfile
+    volumes:
+      - "../requirements_freeze:/app/requirements_freeze"
+  requirements-dev:
+    build:
+      context: ../
+      dockerfile: requirements_freeze/Dockerfile
+      args:
+        build_env: dev
+    volumes:
+      - "../requirements_freeze:/app/requirements_freeze"

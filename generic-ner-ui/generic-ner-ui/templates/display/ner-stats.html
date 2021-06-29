@@ -1,0 +1,16 @@
+<table class="table">
+    <tr>
+        <th scope="col">Entity text</th>
+        <th scope="col">Entity type</th>
+        <th scope="col">Count</th>
+        <th scope="col">Pages</th>
+    </tr>
+    {% for entitystat in entitystats %}
+    <tr>
+        <td scope="row">{{ entitystat.text }}</td>
+        <td scope="row">{{ entitystat.type }}</td>
+        <td scope="row">{{ entitystat.count }}</td>
+        <td scope="row">{{ entitystat.pages }}</td>
+    </tr>
+    {% endfor %}
+</table>

@@ -46,7 +46,8 @@ INSTALLED_APPS = [
     'bootstrap4',
     'social_django',
     'django_icons',
-    'generic_ner_ui',
+    #'generic_ner_ui',
+    'main.apps.MainConfig',
     'django_global_request',
     'django_static_jquery_ui',
 ]
@@ -104,12 +105,20 @@ DATABASES = {
         },
         'ENGINE': 'django.db.backends.mysql',
         'NAME': config.database.schema,
-        'USER': config.database.user,
-        'PASSWORD': config.database.password,
-        'HOST': config.database.host,
+        'USER': 'root',
+        'PASSWORD': 'root1',
+        'HOST': '127.0.0.1',
         'PORT': config.database.port,
     }
 }
+
+
+        # 'USER': 'root',
+        # 'PASSWORD': 'root1',
+        # 'HOST': '127.0.0.1',
+
+SECRET = "5IYGRyR5cGi8TJjTzxg6NfJrZVV1hkvoEKxSfGlj"
+ALLOWED_IPS = ['127.0.0.1', '127.0.0.2', '']
 
 # Password validation
 # https://docs.djangoproject.com/en/2.1/ref/settings/#auth-password-validators
@@ -177,6 +186,7 @@ DJANGO_ICONS = {
         "upload": {"name": "upload"},
         "error": {"name": "exclamation-triangle"},
         "success": {"name": "check"},
+        "times": {"name": "times"},
         "progress": {"name": "spinner"},
         "ner": {"name": "list-ul"},
         "text": {"name": "align-justify"},
@@ -190,8 +200,11 @@ DJANGO_ICONS = {
         "compress": {"name": "compress"},
         "waiting": {"name": "clock-o"},
         "lightbulb": {"name": "lightbulb-o"},
+        "file-text": {"name": "file-text-o"},
     },
 }
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
 
 pipeline_names = list(map(lambda p: p.name, config.pipelines.pipelines))
 assert len(pipeline_names) == len(set(pipeline_names))

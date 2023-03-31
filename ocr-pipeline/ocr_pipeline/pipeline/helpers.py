@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import subprocess
+import os.path
+import sys
+import shutil
 import csv
 import os
 import itertools
@@ -65,12 +69,14 @@ def get_new_files_to_be_processed(path, col_names, index_col, all_files):
 
 def resolve_tesseract_lang(user_input):
     try:
-        lang_select = {"ENG": ["eng", True, "frequency_dictionary_en_82_765.txt", "en_US"],
-                       "DEU": ["deu", True, "de-100k.txt", "de_DE"],
-                       "FRA": ["fra", True, "fr-100k.txt", "fr_FR"],
-                       "RU": ["rus+ukr", True, "ru-100k.txt", "ru_RU"],
-                       "FRAKTUR": ["Fraktur", True, "de-100k.txt", "de_DE"]}
-
+        user_input = user_input.lower()
+        lang_select = {"eng": ["eng", True, "frequency_dictionary_en_82_765.txt", "en_US"],
+                       "deu": ["deu", True, "de-100k.txt", "de_DE"],
+                       "deu_fraktur": ["deu", True, "de-100k.txt", "de_DE"],
+                       "fra": ["fra", True, "fr-100k.txt", "fr_FR"],
+                       "rus": ["rus+ukr", True, "ru-100k.txt", "ru_RU"],
+                       "ru": ["rus+ukr", True, "ru-100k.txt", "ru_RU"],
+                       "fraktur": ["deu", True, "de-100k.txt", "de_DE"]}
         # tess_lang, correction, dict_symspell, dict_enchant
         return lang_select[user_input][0], lang_select[user_input][1], lang_select[user_input][2], lang_select[user_input][3]
     except KeyError:
@@ -297,3 +303,47 @@ def transform_to_bitmap(file_in, file_out, dpi):
     img = Image.open(file_in)
     img = img.convert("RGB")
     img.save(file_out, dpi=(dpi, dpi))
+
+
+def compress(input_file_path, output_file_path, power=0):
+    """Function to compress PDF via Ghostscript command line interface"""
+    quality = {
+        0: '/default',
+        1: '/prepress',
+        2: '/printer',
+        3: '/ebook',
+        4: '/screen'
+    }
+    try:
+        if not os.path.isfile(input_file_path):
+            logger.info(f"Error: invalid path for input PDF file")
+            return False
+
+        if input_file_path.split('.')[-1].lower() != 'pdf':
+            logger.info(f"Error: input file is not a PDF")
+            return False
+
+        gs = get_ghostscript_path()
+        initial_size = os.path.getsize(input_file_path)
+        subprocess.call([gs, '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4',
+                        '-dPDFSETTINGS={}'.format(quality[power]),
+                        '-dNOPAUSE', '-dQUIET', '-dBATCH',
+                        '-sOutputFile={}'.format(output_file_path),
+                         input_file_path])
+        final_size = os.path.getsize(output_file_path)
+        ratio = 1 - (final_size / initial_size)
+        logger.info("Compression by {0:.0%}.".format(ratio))
+        logger.info("Final file size is {0:.1f}MB".format(final_size / 1000000))
+        return True
+
+    except Exception as e:
+        logger.info(f"Error compress: {e}")
+        return False
+
+
+def get_ghostscript_path():
+    gs_names = ['gs', 'gswin32', 'gswin64']
+    for name in gs_names:
+        if shutil.which(name):
+            return shutil.which(name)
+    raise FileNotFoundError(f'No GhostScript executable was found on path ({"/".join(gs_names)})')

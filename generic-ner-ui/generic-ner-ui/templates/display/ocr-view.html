@@ -37,6 +37,13 @@
             </div>
         {% elif entry.conf < 60 and not entry.human_correction  %}
             <div class="correction-tooltip-alt" style="float:left;">
+                <div class="flex">
+                    <input value="{{ entry.text }}">
+                    <span class="toolbar-btn" onclick="custom_correction(this)" id="contract-btn">
+                        <i class="fa fa-check"></i>
+                    </span>
+                </div>
+                <hr>
                 <span class="corr-entry" style="display:inline;" onclick="skip_correction(this)">
                     <i class="fa fa-arrow-right" aria-hidden="true"></i> Is Ok
                 </span>
@@ -46,6 +53,13 @@
             </div>
         {% else %}
             <div class="correction-tooltip-alt">
+                <div class="flex">
+                    <input value="{% if entry.method == "update" or entry.method == "add" %}{{ entry.human_correction }}{% else %}{{ entry.text }}{% endif %}">
+                    <span class="toolbar-btn" onclick="custom_correction(this)" id="contract-btn">
+                        <i class="fa fa-check"></i>
+                    </span>
+                </div>
+                <hr>
                 <span class="corr-entry" onclick="remove_correction(this)"><i class="fa fa-ban" aria-hidden="true"></i> Remove</span>
             </div>
         {% endif %}

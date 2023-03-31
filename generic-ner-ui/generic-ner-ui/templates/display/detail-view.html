@@ -40,11 +40,21 @@
                 <span>* Box deletions can be done on the text view (left side).</span> <br>
             </div>
         </span> 
+
         <span class="divider"></span>
         {% endif %}
 
+        <span class="info-holder" style="padding: 5px;"><i class="fa fa-lightbulb-o"></i> Info
+            <div class="info-box">
+                <h4>Review-Info</h4>
+                <span class="underline-wavy-red ">A red underlined word</span> indicates a spellchecking suggestion is available <br>
+                <span class="underline-wavy-blue">A blue underlined word</span> indicates that the OCR model is unsure about the recognized word <i>(Note: The OCR model can be very sure and still be wrong)</i>
+            </div> 
+        </span>
+        <span class="divider"></span>
+
         <span style="color: gray; padding: 5px; margin-right: 5px; cursor: default;">
-        View:
+            View:
         </span>
 
         <a class="toolbar-btn{% if 'text' == view %} active{% endif %}"
@@ -54,6 +64,13 @@
         <a class="toolbar-btn{% if 'ocr' == view %} active{% endif %}"
         href="{% url 'main:details' id=task_id view='ocr' %}">Exact Positions
         </a>
+
+        {% if view == "ocr" %}
+        <span class="divider"></span>
+        <span style="color: gray; padding: 5px; margin-right: 5px; cursor: default;">Font:</span>
+        <input id="spinner" name="value" value="13" style="width:30px;"/>
+        <span class="toolbar-btn" onclick="toggle_text_fit()" id="fit-font-btn" style="margin-left:7px;"><i class="fa fa-text-width"></i> Fit</span>
+        {% endif %}
         
         <span class="divider"></span>
         <span class="toolbar-btn" onclick="expand_collapse()" id="exp-btn"><i class="fa fa-expand"></i> Expand</span>
@@ -64,23 +81,43 @@
             Download:
         </span>
 
-        <a href="{% url 'main:download_pdf' id=task_id %}" download="{{ file_name }}_OCR.pdf" onclick="show_info_and_fade_out(4000, 'Generating <strong>PDF</srong>')" style="padding: 5px;color: #075071;margin-left:10px">
-            {% icon 'download' extra_classes='red-icon' %} OCR PDF
+        <a href="{% url 'main:download_pdf' id=task_id %}" download="{{ file_name }}.pdf" onclick="show_info_and_fade_out(4000, 'Generating <strong>PDF</srong>')" style="padding: 5px;color: #075071;margin-left:5px">
+            OCR PDF
+            {% if latest_review_date %} 
+                rev
+            {% else %}
+                unrev
+            {% endif %}
+            {% icon 'download' extra_classes='red-icon' %} 
+        </a>
+        <a href="{% url 'main:download_txt' id=task_id %}" download="{{ file_name }}.txt" onclick="show_info_and_fade_out(4000, 'Generating <strong>TXT</srong>')" style="padding: 5px;color: #075071;margin-left:5px">
+            OCR TXT
+            {% if latest_review_date %} 
+                rev
+            {% else %}
+                unrev
+            {% endif %}
+            {% icon 'file-text' extra_classes='blue-icon' %} 
         </a>
 
-        <a href="{% url 'main:download_original' id=task_id %}" download="{{ file_name_original }}"style="padding: 5px;color: #075071;margin-left:10px">
-            <i class="fa fa-download"></i> Original File
+        <a href="{% url 'main:download_json' id=task_id %}" download="{{ file_name }}.json" onclick="show_info_and_fade_out(4000, 'Generating <strong>JSON</srong>')" style="padding: 5px;color: #075071;margin-left:5px">
+            JSON {% icon 'file-text' extra_classes='blue-icon' %}
         </a>
-        <a href="{% url 'main:download_data' %}?paths={{task_id}}" style="padding: 5px;color: #075071;margin-left:10px">
-            <i class="fa fa-file-archive-o"></i> All Data
+
+        <a href="{% url 'main:download_original' id=task_id %}" download="{{ file_name_original }}"style="padding: 5px;color: #075071;margin-left:5px">
+            Original File <i class="fa fa-download"></i> 
+        </a>
+        <a href="{% url 'main:download_data' %}?paths={{task_id}}" style="padding: 5px;color: #075071;margin-left:5px">
+            Other Data <i class="fa fa-file-archive-o"></i> 
         </a>
         <span class="divider"></span>
-        <span class="info-holder" style="padding: 5px;"><i class="fa fa-lightbulb-o"></i> Info
-        <div class="info-box">
-            <h4>Review-Info</h4>
-            <span class="underline-wavy-red ">A red underlined word</span> indicates a spellchecking suggestion is available <br>
-            <span class="underline-wavy-blue">A blue underlined word</span> indicates that the OCR model is unsure about the recognized word <i>(Note: The OCR model can be very sure and still be wrong)</i>
-        </div></span>
+        {% if has_tiff %} 
+            <span style="color: gray; padding: 5px; margin-right: 5px; cursor: default;">
+                Delete:
+            </span>
+            <button class="btn btn-danger download-btn equal-height-btn" onclick="deleteSelectedTIFF();">TIFF</button>
+            <span class="divider"></span>
+        {% endif %}
     </div>
 </div>
 
@@ -96,6 +133,7 @@
         left: 60px; " />
     </div>
     <div class="row" id="page-{{forloop.counter}}">
+        {% include "display/document-view.html" with page=page p_number=forloop.counter view=view %}
         {% if view == "text" %}
         {% include "display/text-view.html" with page=page p_number=forloop.counter %}
         {% elif view == "ner" %}
@@ -103,7 +141,6 @@
         {% elif view == "ocr" %}
         {% include "display/ocr-view.html" with page=page p_number=forloop.counter %}
         {% endif %}
-        {% include "display/document-view.html" with page=page p_number=forloop.counter view=view %}
     </div>
     {% endfor %}
     {% if cut_off%}
@@ -119,6 +156,45 @@
 
 <script type="application/javascript">
 
+    var spinner = $("#spinner").spinner();
+    var fit_text = false;
+
+    function spinner_change() {
+        {% if view == "ocr" %}
+            fit_text = false;
+            resize_ocr_text();
+            $("#fit-font-btn").removeClass("active")
+        {% endif %}
+    }
+    $(spinner).on("change", spinner_change);
+    $(".ui-spinner-button").on("click change", spinner_change);
+    
+    function toggle_text_fit() {
+        fit_text = fit_text ? false : true;
+        $("#fit-font-btn").toggleClass("active")
+        resize_ocr_text();
+    }
+
+    function deleteSelectedTIFF(){
+        deleteRunElement("{% url 'main:delete_tiffs' %}", "{{ task_id }}")
+    }
+    
+    function deleteRunElement(url, task_id) {
+        const data = new FormData();
+        data.append("paths", task_id);
+        const request = new XMLHttpRequest();
+        request.onreadystatechange = function () {
+            if (this.readyState === 4 && this.status === 200) {
+                if (this.responseURL) {
+                    window.location = this.responseURL;
+                }
+            }
+        };
+        request.open("POST", url, true);
+        request.send(data);
+    }
+
+    localStorage.setItem('pos', "{{task_id}}");
     const auto_correction_time = 3000
     const review_pointer = 0;
     
@@ -408,6 +484,9 @@
     function append_correction_data(id, correction, method) {
         console.log(">", method, id);
         split_id = id.split('-')
+        if (method !== "add" && method !== "update_add") {
+            correction = correction.replaceAll(/<\/?[^>]+(>|$)/g, '').replaceAll('&nbsp;', ' ')
+        }
         corrections.push({
             row: parseInt(split_id[3]),
             page: parseInt(split_id[2])-1,
@@ -489,6 +568,7 @@ function expand_collapse(){
     resize_ocr_text()
     {% endif %}
 }
+
 {% if view == "ocr" %}      
 function resize_ocr_text(){
     set_fs = []
@@ -533,8 +613,13 @@ function resize_ocr_text(){
 //
         //ratio = outer_box.height / inner_box.height
         //new_fs = curr_fs * ratio
-        el.querySelector(".inner-text-holder").style.fontSize = set_fs[i] + "px"
 
+        if (fit_text) {
+            el.querySelector(".inner-text-holder").style.fontSize = set_fs[i] + "px"
+        } else {
+            el.querySelector(".inner-text-holder").style.fontSize = spinner.spinner("value") + "px"
+        }
+        
         //inner_box = el.querySelector(".inner-text-holder").getBoundingClientRect()
         //if (outer_box.width < inner_box.width){
         //    ratio = outer_box.width / inner_box.width

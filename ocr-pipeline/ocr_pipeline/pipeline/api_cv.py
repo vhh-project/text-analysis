@@ -113,11 +113,15 @@ def get_rotation_results_api(f, tess_lang='eng', tess_path='', max_size=3500,
 
         # 4-rotate: if 2-rotate difference too low
         if get_change(df.mlc[0], df.mlc[1]) < diff_threshold:
-            df = df.append(x_rotate([90, 270], api, img, max_size=max_size),
-                           ignore_index=True)
+            df = df.append(x_rotate([90, 270], api, img, max_size=max_size), ignore_index=True)
 
-        # evaluate best rotation
-        best_rotation = get_max_mlc(df)
+        # if best out of highest 2 < diff_threshold -> no rotation
+        df = df.sort_values("mlc", ascending=False)
+        if get_change(df.iloc[0].mlc, df.iloc[1].mlc) < diff_threshold:
+            best_rotation = df.loc[0]
+        else:
+            # evaluate best rotation
+            best_rotation = get_max_mlc(df)
     return f, best_rotation.rotate + best_rotation.human_readable_rotation, best_rotation.mlc, best_rotation.length, best_rotation.line_height_px
 
 
@@ -235,14 +239,18 @@ def get_adaptive_binarization_api(file, line_height, adaptive_cs,
     '''
 
     data = []
-    with PyTessBaseAPI(oem=tess_oem, path=tess_config,
-                       lang=tess_lang) as api:
+    with PyTessBaseAPI(oem=tess_oem, path=tess_config, lang=tess_lang) as api:
         bin_size = create_dynamic_bin_size_range(line_height, size_ranges)
-
         img = Image.open(file)
 
-        for size, c, method in tqdm(
-                itertools.product(bin_size, adaptive_cs, adaptive_methods)):
+        # baseline without binarization
+        pairs, lines = tesseract_api_extract(img, api)
+        df_lines = pd.DataFrame([line[1] for line in lines])
+        df_conf = pd.DataFrame(pairs, columns=['text', 'conf'])
+        length, _, mlc = image_to_data_stats(df_conf)
+        data.append([file, None, None, None, mlc, length, np.nan])
+
+        for size, c, method in tqdm(itertools.product(bin_size, adaptive_cs, adaptive_methods)):
             # binarization
             curr_img = adaptive_binary(img, size, c, method)
             curr_img = Image.fromarray(curr_img)
@@ -261,7 +269,7 @@ def get_adaptive_binarization_api(file, line_height, adaptive_cs,
 
             # mlc, length
             df_conf = pd.DataFrame(pairs, columns=['text', 'conf'])
-            length, txt, mlc = image_to_data_stats(df_conf)
+            length, _, mlc = image_to_data_stats(df_conf)
 
             data.append([file, size, c, method, mlc, length, line_height_px])
         img.close()
@@ -293,7 +301,6 @@ def pipeline_api_binarization_gridsearch(valid_files_data,
     '''
     tesseocr api binarization params determination
     '''
-
     fn = partial(get_adaptive_binarization_api,
                  tess_lang=tess_lang,
                  tess_config=tess_config,

@@ -5,8 +5,6 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import nltk
-import torch
-from pytorch_pretrained_bert import BertTokenizer, BertForMaskedLM
 import re
 from tqdm import tqdm
 from enchant.checker import SpellChecker
@@ -118,33 +116,18 @@ def error_detection(text, repeated_words_list, sym_spell, dict_enchant="en_US"):
     return masked_text, enchant_suggestedwords, symspell_suggestedwords, symspell_segmentation, incorrectwords
 
 
-def predict_words(text, predictions, maskids, all_suggestions, symspell_segmentation, incorrectwords, tokenizer, similarity_thresh=0.75, n=3):
+def predict_words(text, maskids, all_suggestions, symspell_segmentation, incorrectwords, tokenizer, similarity_thresh=0.75, n=3):
     for i in range(len(maskids)):
         simmax = 0
         list2 = all_suggestions[i]
         list4 = symspell_segmentation[i]
         predicted_token = []
 
-        if predictions is not None:
-            preds = torch.topk(predictions[0, maskids[i]], k=80)
-            indices = preds.indices.tolist()
-            bert_suggestedwords = tokenizer.convert_ids_to_tokens(indices)
-
-            # compare similarity of top bert words to incorrect_word
-            predicted_token = ''
-            for bert_word in bert_suggestedwords:
-                s = SequenceMatcher(None, bert_word, incorrectwords[i]).ratio()
-                if s is not None and s > simmax:
-                    simmax = s
-                    predicted_token = [bert_word]
-
-        # if bert similarity too low take words from symspell and enchant
-        if simmax < similarity_thresh:
-            final = list2[:n]
-            # segmentations
-            if len(list4) > 1:
-                final = final + [list4]
-            predicted_token = final
+        final = list2[:n]
+        # segmentations
+        if len(list4) > 1:
+            final = final + [list4]
+        predicted_token = final
 
         # filter same as incorrect word suggestions
         if len(predicted_token) > 0:
@@ -157,11 +140,10 @@ def predict_words(text, predictions, maskids, all_suggestions, symspell_segmenta
     return text
 
 
-def apply_correction_workflow(txt, repeated_words_list, tokenizer, sym_spell, bert_model, dict_enchant):
+def apply_correction_workflow(txt, repeated_words_list, tokenizer, sym_spell, dict_enchant):
     '''
     detect and mask errors
-     symspell and enchant suggestions
-     BERT suggestions
+    symspell & enchant correction suggestions
     return final decision
     '''
     all_suggestions = []
@@ -184,23 +166,12 @@ def apply_correction_workflow(txt, repeated_words_list, tokenizer, sym_spell, be
         suggestions = [x for dist, x in sorted(zip(distances, suggestions)) if (dist < distance_threshold)]
         all_suggestions.append(suggestions)
 
-    # bert suggestions
+    # suggestions
     tokenized_text = tokenizer.tokenize(txt_masked)
-    indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
     MASKIDS = [i for i, e in enumerate(tokenized_text) if e == '[MASK]']
 
-    if bert_model:
-        # prepare Torch inputs
-        tokens_tensor = torch.tensor([indexed_tokens])
-
-        # Predict all tokens
-        with torch.no_grad():
-            predictions = bert_model(tokens_tensor)
-    else:
-        predictions = None
-
     # final prediction
-    text_corrected = predict_words(txt_masked, predictions, MASKIDS, all_suggestions, symspell_segmentation, incorrectwords, tokenizer)
+    text_corrected = predict_words(txt_masked, MASKIDS, all_suggestions, symspell_segmentation, incorrectwords, tokenizer)
     return text_corrected
 
 
@@ -247,7 +218,6 @@ def data_clean_for_spelling_correction(df, replace_empty):
 
 def add_spelling_correction_to_dataframe(df_data, sym_spell,
                                          repeated_words_list=[],
-                                         bert_model=False,
                                          dict_enchant="en_US"):
     # text preprocessing
     replace_empty = '[UNK]'
@@ -255,54 +225,16 @@ def add_spelling_correction_to_dataframe(df_data, sym_spell,
     df_data = data_clean_for_spelling_correction(df_data, replace_empty)
 
     n = 300
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-
+    from nltk.tokenize import WhitespaceTokenizer
+    tokenizer = WhitespaceTokenizer()
+    
     # process each dataframe chunk of size n
     for g, df in df_data.groupby(np.arange(len(df_data)) // n):
         txt = ' '.join(df['text_clean'])
-        text_corrected = apply_correction_workflow(txt, repeated_words_list, tokenizer, sym_spell, bert_model, dict_enchant)
+        text_corrected = apply_correction_workflow(txt, repeated_words_list, tokenizer, sym_spell, dict_enchant)
         df_data.loc[df.index, 'corrections'] = text_corrected.split()
 
     df_data.loc[df_data['corrections'] == df_data['text_clean'], 'corrections'] = ''
     df_data.loc[df_data['corrections'].str.contains("[MASK_SAME]"), 'corrections'] = ''
     return df_data
 
-
-# TODO: not in use - RM
-def pipeline_spelling_correction(PATH, EXPORT_RESULTS_PATH, bert_model, sym_spell):
-    df_export = pd.read_csv(PATH)
-    df_export['corrections'] = ''
-
-    ''' data preparation '''
-    replace_empty = '[UNK]'
-    df_export = data_clean_for_spelling_correction(df_export, replace_empty)
-
-    ''' build wordcount dictionary of all n images '''
-    repeated_words_list = build_repeated_words_list(PATH)
-
-    dfs = dict(tuple(df_export.groupby('file')))
-    relevant_columns = ['text', 'conf', 'text_clean']
-    all_files = list(dfs.keys())
-    n = 300
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-
-    for idx in tqdm(all_files):
-        tmp_df = dfs[idx][relevant_columns]
-
-        # process each dataframe chunk of size n
-        for g, df in tmp_df.groupby(np.arange(len(tmp_df)) // n):
-            txt = ' '.join(df['text_clean'])
-            txt = str(txt)
-            text_corrected = apply_correction_workflow(txt, repeated_words_list, tokenizer, sym_spell, bert_model)
-            df_export.loc[df.index, 'corrections'] = text_corrected.split()
-
-        df_export.loc[df_export['corrections'] == df_export['text_clean'], 'corrections'] = ''
-
-    # safe and return results
-    try:
-        df_export.drop(['text_low', 'symspell_sc', 'symspell_ws', 'text_clean'], axis=1, inplace=True)
-        df_export.to_csv(EXPORT_RESULTS_PATH, index=False)
-    except Exception as e:
-        logger.error(f"Could not save {EXPORT_RESULTS_PATH} due to {e}, trying again")
-        df_export.to_csv(EXPORT_RESULTS_PATH, index=False)
-    return df_export

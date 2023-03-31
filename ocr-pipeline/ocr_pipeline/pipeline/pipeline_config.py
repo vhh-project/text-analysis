@@ -59,7 +59,7 @@ class PipelineConfig(RequiredConfigMixin):
     required_config.add_option(
         'tess_lang',
         parser=str,
-        default='ENG',
+        default='eng',
         doc=''
     )
 

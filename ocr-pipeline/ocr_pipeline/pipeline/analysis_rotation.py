@@ -148,9 +148,11 @@ def return_best_shape(df, thresh_len=1.5, thresh_line_height=18):
     3. filter low line height / font size
     4. select & return lowest shape/time from remaining
     """
+    df["shape"] = df["shape"].astype(float)
+    df["length"] = df["length"].astype(float)
     benchmark_idx = df['shape'].idxmax()
     benchmark_row = df.loc[benchmark_idx]
-
+    
     try:
         mlc_mean = np.mean(df.mlc)  # 1.
         mlc_std = np.std(df.mlc)
@@ -171,9 +173,10 @@ def return_best_shape(df, thresh_len=1.5, thresh_line_height=18):
         min_time_idx = df['shape'].idxmin()  # 4.
         best_row = df.loc[min_time_idx]
 
+        logger.info(f"best-shape: {best_row}")
         return best_row
     except Exception as e:
-        logger.info(e)
+        logger.info(f"default-shape: {best_row}")
         return benchmark_row
 
 

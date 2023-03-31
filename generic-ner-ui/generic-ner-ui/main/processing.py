@@ -3,6 +3,12 @@ import datetime
 import io
 import itertools
 import pytz
+import subprocess
+import os.path
+import sys
+import shutil
+from pathlib import Path
+import math
 
 from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
@@ -82,14 +88,21 @@ def get_files_to_download_dir(response):
 
 async def download_file_to_stream(minio_path):
     logger.info(f"downloading {minio_path} from minio")
-    bucket, path = minio_path.split("/", 1)
-    client = create_minio_client()
-    data = client.get_object(bucket, path)
-    response = io.BytesIO()
-    for d in data.stream(32 * 1024):
-        response.write(d)
-    response.seek(0)
-    return response
+    # TODO: - rm in prod
+    # if ("png" in minio_path) | ("tiff" in minio_path) | ("jpg" in minio_path):
+    #     minio_path = "a/b/c.def"
+    try:
+        bucket, path = minio_path.split("/", 1)
+        client = create_minio_client()
+        data = client.get_object(bucket, path)
+        response = io.BytesIO()
+        for d in data.stream(32 * 1024):
+            response.write(d)
+        response.seek(0)
+        return response
+    except Exception as e:
+        logger.warning(f"file not found {minio_path} {e}")
+        return False
 
 
 def download_minio_file(minio_path, content_type="image/png"):
@@ -156,13 +169,16 @@ async def process(run: Run):
     try:
         result = await client.process_case({"minio": run.minio_path,
                                             "lang": run.lang}, run)
-        run.result_data = RunResult(data=result)  # TODO: 
+        run.result_data = RunResult(data=result)
         logger.info(run.result_data)
-        await database_sync_to_async(run.result_data.save)() # TODO: 
+        await database_sync_to_async(run.result_data.save)()
         run.result_prep = await get_result_prep(result)
         run.status = Status.FINISHED
-        logger.info("After -> Pipeline Run")
-        logger.info(run.status)
+        run.finish_date = datetime.datetime.now()
+        minio_bucket, object_id = run.result_prep["output"].split('/', 1)
+        run.has_tiff = has_tiff_file(minio_bucket, object_id, run.file_name, delete=False)
+        run.folder_size = get_folder_size(minio_bucket, object_id)
+
         logger.info(f"successfully processed document {run.file_name}")
     except PipelineError as e:
         if e.page_num is None:
@@ -207,7 +223,8 @@ def start_processing(user, file, name, language, bucket):
         bucket=bucket,
         page_count=1 if name[-4:] != ".pdf" else None,
         review_complete=False,
-        pdf_uptodate=True
+        pdf_uptodate=True,
+        marked_complete=False
     )
     run.save()
     try:
@@ -219,18 +236,97 @@ def start_processing(user, file, name, language, bucket):
         client = create_minio_client()
         _async_loop = create_async_loop()
         client.put_object(minio_bucket, object_id, file, size)
-
-        logger.info(f"{minio_bucket}, {object_id}, {file}, {size}")
-        logger.info(f"{type(minio_bucket)}, {type(object_id)}, {type(file)}, {type(size)}")
-
         _async_loop.call_soon_threadsafe(asyncio.create_task, process(run))
     except Exception as e:
         logger.exception(f"Error uploading file {file}")
         run.error = str(e)
+        run.status = Status.ERROR
         run.save()
+
 
 def update_pdf(minio_bucket, object_id, file, size):
     client = create_minio_client()
     client.put_object(minio_bucket, object_id, file, size)
 
 
+def has_tiff_file(minio_bucket, object_id, original_file, delete=False):
+    client = create_minio_client()
+    list_objects = client.list_objects(minio_bucket, object_id.split("/")[0]+"/")
+
+    for obj in list_objects:
+        filename_base = Path(obj.object_name).suffix
+        filename = Path(obj.object_name).name
+        if (filename_base.lower() in [".tiff", ".tif"]) and (filename != original_file):
+            if delete:
+                client.remove_object(minio_bucket, obj.object_name)
+            return True
+    
+    return False
+
+
+def convert_size(size_bytes):
+   if size_bytes == 0:
+       return "0B"
+   size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+   i = int(math.floor(math.log(size_bytes, 1024)))
+   p = math.pow(1024, i)
+   s = round(size_bytes / p, 2)
+   return "%s %s" % (s, size_name[i])
+
+
+def get_folder_size(minio_bucket, object_id):
+    # https://github.com/minio/minio-py/blob/master/examples/stat_object.py
+    client = create_minio_client()
+    list_objects = client.list_objects(minio_bucket, object_id.split("/")[0]+"/")
+    total = 0
+    for obj in list_objects:
+        try:
+            result = client.stat_object(minio_bucket, obj.object_name)
+            total += result.size
+        except Exception as e:
+            logger.info(f"Error: get_folder_size: {e}")
+    return total
+
+
+def compress(input_file_path, output_file_path, power=0):
+    """Function to compress PDF via Ghostscript command line interface"""
+    quality = {
+        0: '/default',
+        1: '/prepress',
+        2: '/printer',
+        3: '/ebook',
+        4: '/screen'
+    }
+    try:
+        if not os.path.isfile(input_file_path):
+            logger.info(f"Error: invalid path for input PDF file")
+            return False
+
+        if input_file_path.split('.')[-1].lower() != 'pdf':
+            logger.info(f"Error: input file is not a PDF")
+            return False
+
+        gs = get_ghostscript_path()
+        initial_size = os.path.getsize(input_file_path)
+        subprocess.call([gs, '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4',
+                        '-dPDFSETTINGS={}'.format(quality[power]),
+                        '-dNOPAUSE', '-dQUIET', '-dBATCH',
+                        '-sOutputFile={}'.format(output_file_path),
+                         input_file_path])
+        # final_size = os.path.getsize(output_file_path)
+        # ratio = 1 - (final_size / initial_size)
+        # print("Compression by {0:.0%}.".format(ratio))
+        # print("Final file size is {0:.1f}MB".format(final_size / 1000000))
+        return True
+
+    except Exception as e:
+        logger.info(f"Error: {e}")
+        return False
+
+
+def get_ghostscript_path():
+    gs_names = ['gs', 'gswin32', 'gswin64']
+    for name in gs_names:
+        if shutil.which(name):
+            return shutil.which(name)
+    raise FileNotFoundError(f'No GhostScript executable was found on path ({"/".join(gs_names)})')

@@ -28,18 +28,19 @@
         <h3 style="margin-bottom: 30px; margin-top: 0px;">Upload New Files</h3>
 
         <h5>Metadata</h5>
-        <small class="form-text text-muted" style="margin-bottom: 20px;">Select and fill in the metadata before
+        <small class="form-text text-muted" style="margin-bottom: 20px;">Select the document language and fill in the group name before
             uploading files.<br>
             Once you select files the upload starts automatically.</small>
         <div class="form-group row">
             <label class="col-sm-3" for="custom-language-select">Document Language</label>
             <div class="col-sm-4">
-                <select class="form-select" id="custom-language-select">
-                    <option selected value="ENG">English</option>
-                    <option value="DEU">German</option>
-                    <option value="FRAKTUR">German (Fraktur)</option>
-                    <option value="FRA">French</option>
-                    <option value="RU">Russian</option>
+                <select class="form-select" id="custom-language-select" onchange="activateUpload();">
+                    <option disabled selected value="NONE"> - select language - </option>
+                    <option value="eng">English</option>
+                    <option value="deu">German</option>
+                    <option value="deu_fraktur">German (Fraktur)</option>
+                    <option value="fra">French</option>
+                    <option value="rus">Russian</option>
                 </select>
             </div>
         </div>
@@ -59,15 +60,15 @@
         <hr />
         <h5>Files</h5>
         <small class="form-text text-muted" style="margin-bottom: 20px;">To start the upload you can either upload files
-            from your local computer or select files from OneDrive.<br>Allowed file types: .jpg, .png, .pdf, .arw, .dng</small>
+            from your local computer or select files from OneDrive.<br>Allowed file types: .jpg, .png, .pdf, .arw, .dng, .tiff</small>
         <div class="row align-items-center">
             <div class="col-sm">
                 <input id="file-input" class="custom-file-input" type="file" name="myFiles" multiple
-                    style="display:none" accept=".png,.jpg,.jpeg,.pdf,.dng,.arw">
+                    style="display:none" accept=".png,.jpg,.jpeg,.pdf,.dng,.arw,.tif,.tiff">
                 <div class="dropzone" id="drop-zone">
                     <span draggable="false" class="select-notice" style="margin-top: 30px;"><span class="inner">Drag and drop files here to
                         start uploading them<br><br> or <br><br></span>
-                        <button class="btn btn-primary" id="file-button">Select Files to Upload</button>
+                        <button class="btn btn-primary" disabled id="file-button">Select Files to Upload</button>
                     </span>
                     <span draggable="false" class="drop-notice" style="margin-top: 60px;">Drop Files to Upload
                         Them</span>
@@ -77,7 +78,7 @@
                 or
             </div>
             <div class="col-sm-4" style="text-align: center;">
-                <button style="display: inline-block;" class="btn btn-primary" onClick="launchOneDrivePicker()"
+                <button style="display: inline-block;" disabled id="upload-btn-onedrive" class="btn btn-primary" onClick="launchOneDrivePicker()"
                     data-toggle="tooltip" data-placement="top" title=""
                     data-original-title="Click here to upload files directly from OneDrive">Select Files from OneDrive
                     <i style="margin-left:5px;" class="fa fa-cloud"></i>
@@ -122,6 +123,13 @@
 <script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
 <script type="application/javascript">
     let processing = false;
+
+    function activateUpload() {
+        document.querySelector('#upload-btn-onedrive').disabled = false;
+        document.querySelector('#file-button').disabled = false;
+        dropArea = document.getElementById("drop-zone");
+        dropArea.classList.remove("dz-disable")
+    }
 
     function startUpload(filesData) {
         const languageSelect = document.getElementById("custom-language-select");
@@ -291,7 +299,7 @@
     // ************************ Drag and drop ***************** //
     let dropArea = document.getElementById("drop-zone");
 
-        // Prevent default drag behaviors
+    // Prevent default drag behaviors
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, preventDefaults, false);
         document.body.addEventListener(eventName, preventDefaults, false);
@@ -328,4 +336,6 @@
 
         postFiles(files)
     }
+
+    dropArea.classList.add("dz-disable")
 </script>

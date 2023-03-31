@@ -13,6 +13,7 @@
         <li>Click on the "Upload New Files" in the upper right corner to get started. </li>
         <li>Once you uploaded your first files you can follow their status and results here.</li>
     </ul>
+    <i style="color: #676767;font-size: 12px;margin: 50px;text-align: center;display: block;">BOW was created as part of the VHH Project by the Information Retrieval Group of TU Wien. <br> This project has received funding from European Union's Event Horizon 2020 research and innovation programme under grant agreement No. 822670.</i>
 </div>
 
 {% else %}
@@ -35,16 +36,28 @@
             margin-top: -7px;
             "><i class="fa fa-lightbulb-o notice" style="float: left;margin-right: 10px;"></i> We are currently processing many documents &ndash; wait times might be longer. <br>Thank you for your patience!</span>
         {% endif %}</h3>
-    <div style="display: none; margin-bottom: 10px; margin-top: 30px; height: 40px;" id="select-buttons">
-        <span style="cursor: default;
-        color: #676767;
-        margin-right: 10px;top: 3px;
-        position: relative;">For all selected:</span>
-        <button class="btn btn-primary download-btn" onclick="downloadPDFs();">Download PDFs</button>
-        <button class="btn btn-primary download-btn" onclick="downloadOcrData();">Download All Data</button>
-        <button class="btn btn-danger" style="margin-left: 10px;" onclick="deleteSelectedFiles();">Delete Selected
-            Files
-        </button>
+    <div style="display: none; margin-bottom: 50px; margin-top: 30px; height: 40px;" id="select-buttons">
+
+        <div style="margin:5px; overflow:auto;">
+            <span style="cursor: default;
+            color: #676767;
+            margin-right: 10px;top: 3px;
+            position: relative;">For all selected download:</span>
+            <button class="btn btn-primary download-btn equal-height-btn dl-disable" onclick="downloadPDFs();">OCR PDF</button>
+            <button class="btn btn-primary download-btn equal-height-btn dl-disable" onclick="downloadTXTs();">OCR TXT</button>
+            <button class="btn btn-primary download-btn equal-height-btn dl-disable" onclick="downloadJSON();">JSON</button>
+            <button class="btn btn-primary download-btn equal-height-btn dl-disable" onclick="downloadOriginal();">Original</button>
+            <button class="btn btn-primary download-btn equal-height-btn dl-disable" onclick="downloadOcrData();">Other Data</button>
+        </div>
+        <div style="margin:5px; overflow:auto;"> 
+            <span style="cursor: default;
+            color: #676767;
+            margin-right: 10px;top: 3px;
+            position: relative;">For all selected:</span>
+            <button class="btn btn-info download-btn equal-height-btn dl-disable" onclick="markComplete();">Mark/Unmark Complete</button> 
+            <button class="btn btn-danger download-btn equal-height-btn dl-disable" onclick="deleteSelectedTIFF();">Delete TIFF</button>
+            <button class="btn btn-danger equal-height-btn dl-disable" onclick="deleteSelectedFiles();">Delete Files</button>
+        </div>
     </div>
     <div style="margin-bottom: 10px; margin-top: 30px;height: 40px;" id="select-msg">
         <span style="cursor: default;
@@ -52,57 +65,65 @@
         margin-right: 10px;
         display: inline-block;
         padding-top: 8px;">Select one or more files to download OCR results or delete the upload.</span>
+        <button class="btn btn-primary" onclick="toggle_all_groups({{grouped_runs|length}});">Toggle All Groups</button>
+    </div>
+
+    <div style="display: flex;">
+        <h3>
+            Review <span style="color: gray;font-size: 20px;">{{ file_name }}</span>
+        </h3>
+        <span class="alert alert-success" style="margin-left: auto; margin-bottom: 0; padding: 7px; display: none;" id="info-alerts"></span>
     </div>
     
 </div>
-<div class="container" style="margin-top: 135px;">
+<div class="container" style="margin-top: 165px;">
 
         <table class="table">
             <tr>
                 <th scope="col" colspan="3">File</th>
-                <th scope="col">Uploaded</th>
-                <th scope="col">Lang.</th>
-                <th scope="col">Pages</th>
-                <th scope="col">Review</th>
-                <th scope="col">Status</th>
-                <th scope="col"></th>
+                <th scope="col" style="width: 100px;">Uploaded</th>
+                <th scope="col" style="width: 50px;">Lang.</th>
+                <th scope="col" style="width: 50px;">Pages</th>
+                <th scope="col" style="width: 100px;">Status</th>
+                <th scope="col" style="width: 100px;">PDF</th>
+                <th scope="col" style="width: 100px;">TXT</th>
+                <th scope="col" style="width: 80px;">JSON</th>
+                <th scope="col" style="width: 50px;">Original</th>
+                <th scope="col" style="width: 50px;">TIFF</th>
+                <th scope="col" style="width: 80px;">Size</th>
+                <th scope="col" style="width: 50px;">Complete</th>
+                <!-- <th scope="col" style="width: 100px;"></th> -->
             </tr>
             {% for g, rs in grouped_runs.items|dictsort:"0.lower" %}
-            <tr><td scope="row" class="group-header"><input id="check-select-g-{{ forloop.counter0 }}" type="checkbox" onchange="selection_changed_group(this, {{ forloop.counter0 }})" style="margin-top: 6px;"></td>
-                <td colspan="7" scope="row" class="group-header"><b><label for="check-select-g-{{ forloop.counter0 }}">{{ g }}</label></b> <i class="fa fa-compress" onclick="toggle_group({{ forloop.counter0 }})"></i></td>
+            <tr>
+                <td colspan="12" scope="row" class="group-header">
+                    <input id="check-select-g-{{ forloop.counter0 }}" type="checkbox" onchange="selection_changed_group(this, {{ forloop.counter0 }})" style="margin-top: 6px;margin-right: 10px;"> 
+                    <b>    
+                        <span contenteditable id="check-select-g-name-{{ forloop.counter0 }}" class="group-edit-disable" for="check-select-g-{{ forloop.counter0 }}" value="{{ g }}" onclick="edit_group({{ forloop.counter0 }})">{{ g }}</span>
+                    </b> 
+                    <i id="save-g-icon-{{ forloop.counter0 }}" class="fa fa-floppy-o group-edit" style="display: none;" onclick="save_edit_group({{ forloop.counter0 }})"></i>
+                    ({{rs|length}} Files)
+                </td>
+
+                <td colspan="2" scope="row" class="group-header">
+                    <i class="fa fa-compress group-snap-in" onclick="toggle_group({{ forloop.counter0 }})"></i>
+                </td>
             </tr>
             <tbody id="body-group-{{ forloop.counter0 }}">
                 {% for run in rs %}
                 <tr style="font-size: 14px;">
                     <td scope="row"></td>
-                    <td scope="row"><input id="check-select-t-{{ run.task_id }}" type="checkbox" onchange="selection_changed(this,'{{ run.task_id }}')" style="margin-top: 3px;" ></td>
+                    <td scope="row"><input id="check-select-t-{{ run.task_id }}" type="checkbox" onchange="selection_changed(this,'{{ run.task_id }}', '{{ run.folder_size_bytes }}')" style="margin-top: 3px;" ></td>
                     <td scope="row"><label style="margin: 0;" for="check-select-t-{{ run.task_id }}">{{ run.file_name }}</label></td>
                     <td scope="row" style="width: 100px;">{{ run.upload_date|date:'Y-m-d' }}</td>
                     <td scope="row" style="width: 50px;">{{ run.lang }}</td>
                     <td scope="row" style="width: 50px;" id="page-col-{{run.task_id}}">{% if run.page_count %}{{ run.page_count }}{% else %}&ndash;{% endif %}</td>
-
-                    <td scope="row"><label style="margin: 0;" for="check-select-t-{{ run.task_id }}">
-                        {% if run.status == 1 %}
-                        {% elif run.status == 3 %}
-                            {% if run.review_complete == 1 %}
-                                <i class='fa fa-check'></i>
-                            {% else %}
-                                <i class='fa fa-times'></i>
-                            {% endif %}
-                        {% elif run.status == 0 %}
-                            {% icon 'waiting' %} Waiting
-                        {% else %}
-                            {% icon 'progress' extra_classes='fa-spin' %} Processing
-                        {% endif %}
-                        </label>
-                    </td>
-
                     <td scope="row" style="width: 100px;" id="status-col-{{run.task_id}}">
                         {% if run.status == 1 %}
                         {% icon 'error' %} <span data-toggle="tooltip" data-placement="top"
                                                  title="{{ run.error }}">Error</span>
                         {% elif run.status == 3 %}
-                        {% icon 'success' %} <a href="{% url 'main:details' id=run.task_id %}/ocr">Preview</a>
+                        {% if run.review_complete == 1 %}<i class='fa fa-check'></i>{% else %}<i class='fa fa-edit'></i>{% endif %} <a href="{% url 'main:details' id=run.task_id %}/ocr">Review</a>
                         {% elif run.status == 0 %}
                         {% icon 'waiting' %} Waiting
                         {% else %}
@@ -110,11 +131,63 @@
                         {% endif %}
                     </td>
                     <td scope="row" style="width: 100px;text-align: right;">
-                        <a href="{% url 'main:download_pdf' id=run.task_id %}" download="{{ run.file_name }}_OCR.pdf"
+                        <a href="{% url 'main:download_pdf' id=run.task_id %}" download="{{ run.file_name }}.pdf"
                            style="color: #075071;{% if run.status == 3 %}display:inline;{%else%}display:none;{% endif %}" id="pdf-download-single-{{run.task_id}}">
-                             Download {% icon 'download' extra_classes='red-icon' %}
+                           OCR 
+                           {% if run.latest_review_date %} 
+                                rev
+                           {% else %}
+                                unrev
+                           {% endif %}
+                           {% icon 'download' extra_classes='red-icon' %}
+                        </a>
+                    </td>
+                    <td scope="row" style="width: 100px;text-align: right;">
+                        <a href="{% url 'main:download_txt' id=run.task_id %}" download="{{ run.file_name }}.txt"
+                           style="color: #075071;{% if run.status == 3 %}display:inline;{%else%}display:none;{% endif %}" id="txt-download-single-{{run.task_id}}">
+                            OCR 
+                            {% if run.latest_review_date %} 
+                                rev
+                            {% else %}
+                                unrev 
+                            {% endif %}
+                            {% icon 'file-text' extra_classes='blue-icon' %}
+                        </a>
+                    </td>
+                    <td scope="row" style="width: 80px;text-align: center;">
+                        <a href="{% url 'main:download_json' id=run.task_id %}" download="{{ run.file_name }}.json"
+                           style="color: #075071;{% if run.status == 3 %}display:inline;{%else%}display:none;{% endif %}" id="json-download-single-{{run.task_id}}">
+                           JSON {% icon 'file-text' extra_classes='blue-icon' %}  
+                        </a>
+                    </td>
+                    <td scope="row" style="width: 50px;text-align: center;">
+                        <a href="{% url 'main:download_original' id=run.task_id %}" download="{{ run.file_name }}"
+                           style="color: #075071;{% if run.status == 3 %}display:inline;{%else%}display:none;{% endif %}" id="original-download-single-{{run.task_id}}">
+                            Original 
                         </a>
                         
+                    </td>
+                    <td scope="row" style="width: 50px; text-align: center;" id="has_tiff-single-{{run.task_id}}">
+                        <div style="{% if run.status == 3 %}display:inline;{%else%}display:none;{% endif %}" >
+                            {% if run.has_tiff %} 
+                                yes
+                            {% else %}
+                                no 
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td scope="row" style="width: 80px; text-align: center;" id="folder_size-{{run.task_id}}">
+                        <div style="{% if run.status == 3 %}display:inline;{%else%}display:none;{% endif %}" >
+                            {{ run.folder_size }}
+                        </div>
+                    </td>
+                    <td scope="row" style="width: 50px; text-align: center;">
+                        <div style="{% if run.status == 3 %}display:inline;{%else%}display:none;{% endif %}" id="marked_complete-{{run.task_id}}">
+                            {% if run.marked_complete == 1 %}
+                            <i class='fa fa-check'></i>
+                            {% else %}
+                            <i class='fa fa-times'></i>
+                            {% endif %} 
                     </td>
                 </tr>
                 {% endfor %}
@@ -122,7 +195,19 @@
 
             {% endfor %}
         </table>
+        <i style="color: #676767;font-size: 12px;margin: 50px;text-align: center;display: block;">BOW was created as part of the VHH Project by the Information Retrieval Group of TU Wien. <br> This project has received funding from European Union's Event Horizon 2020 research and innovation programme under grant agreement No. 822670.</i>
         <script type="application/javascript">
+
+            if (localStorage.getItem("pos") !== null) {                
+                var item_top = document.getElementById("status-col-"+localStorage.getItem('pos')).getBoundingClientRect().top
+                var add_offset = document.getElementById('downloader').parentNode.offsetHeight + 64
+                window.scroll({
+                    top: item_top - add_offset,
+                    behavior: 'smooth' // 'auto' for instant scroll
+                });
+                localStorage.removeItem('pos');
+            }
+
             const ids = [
                 {% for g, rs in grouped_runs.items|dictsort:"0.lower" %}
                     {% for run in rs %}
@@ -146,15 +231,14 @@
                 {% endfor %}
             ];
 
-            const selected_files = [];
+            var selected_files = [];
 
-            function selection_changed(checkbox,task_id) {
+            function selection_changed(checkbox, task_id, folder_size_bytes) {
                 if (checkbox.checked) {
-                    selected_files.push(task_id);
+                    selected_files.push([task_id, folder_size_bytes/1024.0/1024.0]); // bytes to megabytes
                 } else {
                     for (let i = 0; i < selected_files.length; i++) {
-
-                        if (selected_files[i] === task_id) {
+                        if (selected_files[i][0] === task_id) {
                             selected_files.splice(i, 1);
                             i--;
                         }
@@ -189,47 +273,16 @@
                 //}
             }
 
-            function downloadPDFs() {
+
+            function markComplete() {
                 if (selected_files.length === 0) {
                     return;
                 }
-
-                files = Array.from(new Set(selected_files));
-                interv = null;
-                const downloader = () => {
-                    if(files.length > 0){
-                        id = files.pop();
-                        $("#pdf-download-single-"+id)[0].click();
-                    }
-                    else{clearInterval(interv);}
-                };
-                interv = setInterval(downloader,100)
-            }
-
-            function downloadOcrData() {
-                if (selected_files.length === 0) {
-                    return;
-                }
-
-                const url = new URL("{% url 'main:download_data' %}", window.location.origin);
-                for (const file of (new Set(selected_files))) {
-                    url.searchParams.append('paths', file);
-                }
-                const downloader = $("#downloader")[0];
-                downloader.setAttribute("href", url);
-                downloader.click();
-            }
-
-            function deleteSelectedFiles() {
-                if (selected_files.length === 0) {
-                    return;
-                }
-
                 const data = new FormData();
                 for (const file of (new Set(selected_files))) {
-                    data.append("paths", file);
+                    data.append("paths", file[0]);
                 }
-                const url = "{% url 'main:delete_files' %}";
+                const url = "{% url 'main:update_marked_complete' %}";
                 const request = new XMLHttpRequest();
                 request.onreadystatechange = function () {
                     if (this.readyState === 4 && this.status === 200) {
@@ -241,13 +294,179 @@
                 request.open("POST", url, true);
                 request.send(data);
             }
+            
+            function downloadRunElement(url, mb_per_s=2.5) {
+                if (selected_files.length === 0) {
+                    return;
+                }
+                files = Array.from(new Set(selected_files));
+                interv = null;
+                $(".dl-disable").prop('disabled', true);
+                console.log("DL-",url, " ", files);
+
+                const downloader = (id) => {
+                    $(url+id[0])[0].click();
+                };
+                // TODO: too small delay causing DL inconsistencies 
+                function dl_loop(id) {         
+                    let mb = id[1]
+                    let wait = (mb / mb_per_s) * 1000
+                    if (wait < 1000) {
+                        wait = 1000
+                    }
+                    console.log("wait:", wait, "size:", mb);
+                    downloader(id)
+                    setTimeout(function() {       
+                        if (files.length > 0) { 
+                            id = files.pop();         
+                            dl_loop(id);            
+                        } else {
+                            $(".dl-disable").prop('disabled', false);
+                        }                   
+                    }, wait)
+                }
+
+                id = files.pop(); 
+                dl_loop(id);
+            }
+
+            function downloadPDFs() {
+                downloadRunElement("#pdf-download-single-", 6)
+            }
+
+            function downloadTXTs() {
+                downloadRunElement("#txt-download-single-", 10)
+            }
+
+            function downloadOriginal(){
+                downloadRunElement("#original-download-single-", 6)
+            }
+
+            function downloadJSON(){
+                downloadRunElement("#json-download-single-", 10)
+            }
+
+            function downloadOcrData() {
+                if (selected_files.length === 0) {
+                    return;
+                }
+                cnt = 0
+                files = Array.from(new Set(selected_files));
+                $(".dl-disable").prop('disabled', true);
+                console.log("DL-zip", files);
+
+                const downloader = (id) => {
+                    console.log("> zip ", id);
+                    const url = new URL("{% url 'main:download_data' %}", window.location.origin);
+                    url.searchParams.append('paths', id[0]);
+                    const downloader_single = $("#downloader")[0];
+                    downloader_single.setAttribute("href", url);
+                    downloader_single.click();
+                };
+
+                function dl_loop(id) {         
+                    let mb = id[1]
+                    const mb_per_s = 4
+                    let wait = (mb / mb_per_s) * 1000
+                    if (wait < 1000) {
+                        wait = 1000
+                    }
+                    console.log("wait:", wait, "size:", mb);
+                    downloader(id)
+                    setTimeout(function() {       
+                        if (files.length > 0) { 
+                            id = files.pop();         
+                            dl_loop(id);            
+                        } else {
+                            $(".dl-disable").prop('disabled', false);
+                        }                   
+                    }, wait)
+                }
+
+                id = files.pop(); 
+                dl_loop(id);
+            }
+
+            function deleteRunElement(url) {
+                if (selected_files.length === 0) {
+                    return;
+                }
+                const data = new FormData();
+                for (const file of (new Set(selected_files))) {
+                    data.append("paths", file[0]);
+                }
+                const request = new XMLHttpRequest();
+                request.onreadystatechange = function () {
+                    if (this.readyState === 4 && this.status === 200) {
+                        if (this.responseURL) {
+                            window.location = this.responseURL;
+                        }
+                    }
+                };
+                request.open("POST", url, true);
+
+                request.send(data);
+            }
+
+            function deleteSelectedFiles() {
+                deleteRunElement("{% url 'main:delete_files' %}")
+            }
+
+            function deleteSelectedTIFF() {
+                deleteRunElement("{% url 'main:delete_tiffs' %}")
+            }
+
+            var prev_group_name = ""
+            var edit_mode = false
+            function edit_group(id) {
+                show_info_and_fade_out(3000, "change group name & save")
+                if (edit_mode == false) {
+                    edit_mode = true
+                    // set all other inputs to non editable
+                    $('.group-edit-disable').not("#check-select-g-name-"+id).prop('contenteditable', false)
+                    prev_group_name = document.getElementById("check-select-g-name-"+id).innerHTML
+                    document.getElementById("save-g-icon-"+id).style.display = "inline";
+                } else {
+                    console.log("wrn: edit on another group");
+                }
+            }
+            
+            function save_edit_group(id) {
+                // get new group name
+                var new_group_name = document.getElementById("check-select-g-name-"+id).innerHTML
+                document.getElementById("save-g-icon-"+id).style.display = "none";
+
+                // send rename data
+                const data = new FormData();
+                data.append("prev_group_name", prev_group_name)
+                data.append("new_group_name", new_group_name)
+                const request = new XMLHttpRequest();
+                request.open("POST", "{% url 'main:rename_group' %}", true);
+                request.send(data);
+
+                // reset edir mode
+                $(".group-edit-disable").prop('contenteditable', true);
+                edit_mode = false
+            }
+
+            function show_info_and_fade_out(fade_time, text) {
+                $("#info-alerts").fadeIn(50)
+                $("#info-alerts").html(text)
+                $("#info-alerts").fadeOut(fade_time);
+            }
+
             function toggle_group(id){
                 $("#body-group-"+id).toggle(0)
             }
 
+            function toggle_all_groups(num_groups){
+                for (let i = 0; i < num_groups; i++) {
+                    toggle_group(i)
+                }
+            }
+
 
             function check_updates() {
-                
                 if(states.length===0) {
                     return;
                 }
@@ -270,8 +489,20 @@
                                 states.splice(idx, 1);
                             }
                             else if (run.status == 3){
-                                status = "<i class='fa fa-check'></i> <a href='{% url 'main:base' %}view/"+run.task_id+"/ocr'>Preview</a>"
+                                status = "<i class='fa fa-edit'></i> <a href='{% url 'main:base' %}view/"+run.task_id+"/ocr'>Review</a>"
                                 $("#pdf-download-single-"+run.task_id).show(0)
+                                $("#txt-download-single-"+run.task_id).show(0)
+                                $("#original-download-single-"+run.task_id).show(0)
+                                $("#json-download-single-"+run.task_id).show(0)
+
+                                if (run.has_tiff == 1){
+                                    $("#has_tiff-single-"+run.task_id).html("yes")
+                                } else {
+                                    $("#has_tiff-single-"+run.task_id).html("no")
+                                }
+                                $("#folder_size-"+run.task_id).html(run.folder_size)                                
+                                $("#marked_complete-"+run.task_id).show(0)
+
                                 $("#page-col-"+run.task_id).html(run.page_count)
                                 idx = ids.findIndex(function(item) { return item == run.task_id; })
                                 ids.splice(idx, 1);
@@ -284,13 +515,13 @@
 
                         });
 
-                        setTimeout(check_updates, 5000);
+                        setTimeout(check_updates, 30000);
                     }
                 };
                 request.open("POST", url, true);
                 request.send(data);
             }
-            setTimeout(check_updates, 50);
+            setTimeout(check_updates, 10000);
         </script>
 
     <!--<h4 style="margin-bottom: 30px; margin-top: 40px;">How to use BOW</h4>

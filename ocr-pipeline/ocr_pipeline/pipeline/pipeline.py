@@ -4,16 +4,16 @@
 import warnings
 import os
 import hashlib
+import tempfile
 from loguru import logger
 from pathlib import Path
 import shutil
 from typing import Sequence, Union
 import pandas as pd
 import pkg_resources
-from pytorch_pretrained_bert import BertForMaskedLM
 from symspellpy import SymSpell
 
-#from sutime import SUTime
+
 
 from ocr_pipeline.pipeline.analysis_computer_vision import \
     grayscale_valid_files, pipeline_hocr_extract, \
@@ -26,9 +26,7 @@ from ocr_pipeline.pipeline.api_cv import pipeline_api_rotation_determination, \
 from ocr_pipeline.pipeline.file_preparation import create_data_work_directory,\
     paths_to_df, get_valid_files, pipeline_file_format_convert, \
     pipeline_transform_raw, pipeline_split_pdf, merge_df
-from ocr_pipeline.pipeline.helpers import resolve_tesseract_lang
-from ocr_pipeline.pipeline.time_entity_recognition import \
-    pipeline_add_time_detection
+from ocr_pipeline.pipeline.helpers import resolve_tesseract_lang, compress
 
 warnings.simplefilter("ignore", UserWarning)
 
@@ -40,30 +38,23 @@ class Pipeline:
         self.config = config
 
     def setup(self):
-        # 00 create results dir
+        # create results directory
         if self.config.RESULT_DIR:
             Path(self.config.RESULT_DIR).mkdir(parents=True, exist_ok=True)
-        # 00 create work copy of original data
+        # create work copy of original data
         if self.config.work_directory:
             create_data_work_directory(self.config.og_directory,
                                        self.config.work_directory,
                                        overwrite=False)
-        # tesseract settings
-        #tess_lang, ocr_correction, dict_symspell, dict_enchant = resolve_tesseract_lang(self.config.tess_lang)
-
+        
         import nltk
         nltk.download('averaged_perceptron_tagger')
         nltk.download('maxent_ne_chunker')
         nltk.download('punkt')
         nltk.download('words')
 
-        self.sym_spell = False
-        self.bert_model = False
-
-        # SUTIME_JAR_DIR = '/home/work/ocr/sutime_dependencies/'
-        # logger.info("init sutime tagger")
-        # jar_files = os.path.join(os.path.dirname(SUTIME_JAR_DIR), 'jars')
-        # self.sutime = SUTime(jars=jar_files, mark_time_ranges=True)
+        # TODO: DEV ONLY PARAMETER
+        #self.config.N_CPU = 1
 
         logger.info(f"tessdata_fast: {self.config.path_tess_data_fast}")
         logger.info(f"tessdata_best: {self.config.path_tess_data_best}")
@@ -71,6 +62,8 @@ class Pipeline:
         logger.info(f"config best: {self.config.tess_config_best}")
         logger.info(f"config default: {self.config.tess_config_standard}")
         logger.info(f"N_CPU: {self.config.N_CPU}, batch_size: {self.config.batch_size}")
+
+        self.sym_spell = False
 
     def transform_filetypes(self, paths: Paths = None) -> Paths:
         # determine available file types
@@ -233,13 +226,6 @@ class Pipeline:
         return merge_df(data, export_best_binarization_params(results,
                                                               self.config.GS_PATH))
 
-    def init_correction_lib_bert(self):
-        if self.bert_model:
-            return True
-        logger.info('init BERT model')
-        bert_model = BertForMaskedLM.from_pretrained('bert-base-uncased')
-        self.bert_model = bert_model
-        return self.bert_model
 
     def init_correction_lib_symspell(self, dict_symspell):
         if self.sym_spell:
@@ -276,17 +262,10 @@ class Pipeline:
             df = pipeline_hocr_add_spellcorrection(df,
                                                    sym_spell=self.sym_spell,
                                                    repeated_words_list=[],
-                                                   bert_model=self.bert_model,
                                                    dict_enchant=dict_enchant)
             if self.config.HOCR_RESULTS_PATH is not None:
                 df.to_csv(self.config.HOCR_RESULTS_PATH, index=False)
         return df
-
-    def time_recognition(self, data):
-        if data is None:
-            data = pd.read_csv(self.config.HOCR_RESULTS_PATH)
-        data = pipeline_add_time_detection(data, self.sutime, self.config.N_CPU)
-        return data
 
     def export_single_pdf(self, data, out_path=None):
         from reportlab.pdfbase import pdfmetrics
@@ -296,7 +275,12 @@ class Pipeline:
         if out_path is None:
             out_path = self.config.HOCR_DIR + "/out.pdf"
 
-        create_single_pdf(data, out_path)
+        with tempfile.NamedTemporaryFile(suffix='.pdf') as temp:
+            _ = create_single_pdf(data, temp.name,title=os.path.splitext(os.path.split(str(out_path))[1])[0].replace("_result",""))
+            success = compress(temp.name, out_path, power=1)
+            if not success:
+                out_path = temp.name
+
         return out_path
 
     def convert_page(self, row, correction_included):
@@ -332,6 +316,9 @@ class Pipeline:
 
         text = " ".join(entry["text"] for entry in converted_entries)
 
+        if "was_rotated" not in row:
+            row.was_rotated = 0
+
         return {
             "ner": {
                 "entries": converted_entries,
@@ -359,9 +346,10 @@ class Pipeline:
             }
         }
 
-    def convert_processing_output(self, data, pdf_file, ocr_correction):
+    def convert_processing_output(self, data, pdf_file, ocr_correction, lang):
         return {
             "output": pdf_file,
+            "language": lang,
             "pages": [
                 self.convert_page(row, ocr_correction)
                 for _, row in data.iterrows()
@@ -373,20 +361,20 @@ class Pipeline:
             lang = self.config.tess_lang
 
         tess_lang, ocr_correction, dict_symspell, dict_enchant = resolve_tesseract_lang(lang)
-        logger.info(f"Language Config: {lang} {tess_lang}, {ocr_correction}, {dict_symspell}, {dict_enchant}")
+        logger.info(f"Language Config: {tess_lang}, {ocr_correction}, {dict_symspell}, {dict_enchant}, {lang}")
 
-        if file.suffix.upper() not in ['.PNG', '.JPG', '.PDF', '.ARW', '.DNG', '.JPEG']:
-            raise Exception(f"The file type {file.suffix} is not supported")
-
-        logger.info(self.config.to_file_format)
         if str(file.suffix.upper()) == '.JPEG':
             base, _ = os.path.splitext(str(file))
             os.rename(str(file), f"{base}.jpg")
             file = Path(f"{base}.jpg")
 
+        if file.suffix.upper() not in ['.PNG', '.JPG', '.PDF', '.ARW', '.DNG', '.TIFF', '.TIF']:
+            raise Exception(f"The file type {file.suffix} is not supported")
+
         data = self.transform_filetypes([file])
         data = self.grayscale_images(data)
-        data = self.correct_rotation(data, tess_lang=tess_lang)
+        if str(file.suffix.upper()) in ['.ARW', '.DNG']:
+            data = self.correct_rotation(data, tess_lang=tess_lang)
         data = self.shape_determination(data,
                                         shapes=[0.2, 0.3, 0.4, 0.5, 0.8, 1],
                                         tess_lang=tess_lang)
@@ -395,14 +383,23 @@ class Pipeline:
                                  cv_adaptive_cs=[15, 25],
                                  cv_adaptive_methods=[0, 1],
                                  tess_lang=tess_lang)
+
+        data = data.astype({"size": "int",
+                            "c": "int",
+                            "method": "int",
+                            "length": "int",
+                            "mlc": "float"})
+
         self.sym_spell = False
         self.init_correction_lib_symspell(dict_symspell)
         data = self.export_hocr(data, tess_lang, ocr_correction, dict_enchant)
+
         # data = self.time_recognition(data)
         pdf_file = file.parent / f"{file.stem}_result.pdf"
+
         self.export_single_pdf(data, pdf_file)
 
-        return self.convert_processing_output(data, pdf_file, ocr_correction)
+        return self.convert_processing_output(data, pdf_file, ocr_correction, tess_lang[:3])
 
     def hash_output(self):
         BLOCK_SIZE = 65536

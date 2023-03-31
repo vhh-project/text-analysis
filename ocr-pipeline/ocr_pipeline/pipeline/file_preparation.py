@@ -6,6 +6,7 @@ import shutil
 import os
 
 import imageio
+import numpy as np
 import pandas as pd
 from PIL import Image
 from loguru import logger
@@ -13,6 +14,7 @@ from pathlib import Path
 import rawpy
 from tqdm import tqdm
 import fitz
+from pdf2image import convert_from_path, pdfinfo_from_path
 
 
 def open_pil_image(img_path):
@@ -203,8 +205,6 @@ def convert_file_format(transform_fn, df_files, selector, file_type_name,
             ]
             ), ignore_index=True)
 
-        logger.info(df_files)
-
         failed_transformations = df_transform_results[
             ~df_transform_results.success].file.to_list()
         for f in to_remove:
@@ -220,7 +220,7 @@ def convert_file_format(transform_fn, df_files, selector, file_type_name,
     return df_files
 
 
-def split_pdf_into_images(path, to_format, dpi=300):
+def split_pdf_into_images(path, to_format="png", dpi=300):
     '''
     given any pdf file (multi or single page) to be split
     into single images (png or pdf if to_pdf=True)
@@ -230,19 +230,27 @@ def split_pdf_into_images(path, to_format, dpi=300):
         f_path = os.path.split(path)[0]
         f_name = os.path.splitext(os.path.basename(path))[0]
         result_pages = []
-        zoom = 2
-        mat = fitz.Matrix(zoom, zoom)
 
-        with fitz.open(path) as doc:
-            page_count = doc.pageCount
-            logger.info(f"pdf pages to be split: {page_count}")
+        info = pdfinfo_from_path(path)
+        max_pages = info['Pages']
+        logger.info(f"pdf pages to be split: {max_pages}")
 
-            for page in tqdm(range(0, page_count)):
-                output_filename = f"{f_path}/{f_name}_{page + 1}.{to_format}"
-                page_loaded = doc.loadPage(page)  # equivalent: doc[page]
-                pix = page_loaded.getPixmap(matrix=mat,
-                                            alpha=False, annots=False)
-                pix.writePNG(output_filename)
+        step = 10
+        for page in range(0, max_pages + 1, step):
+            files = convert_from_path(path,
+                                      dpi=dpi,
+                                      first_page=page,
+                                      last_page=min(page + step - 1, max_pages),
+                                      thread_count=step - 1,
+                                      output_folder=f_path,
+                                      fmt=to_format,
+                                      output_file=f"{f_name}_",
+                                      paths_only=True)
+
+            for index, file in enumerate(files):
+                parts = file.rsplit("_", 1)
+                output_filename = f"{parts[0]}-{parts[1].split('-')[1]}"
+                os.rename(file, output_filename)
                 result_pages.append((True, output_filename, None, None, None))
 
         return result_pages
@@ -345,6 +353,11 @@ def file_format_convert(img_path, to_format, dpi=300):
 
     try:
         img = Image.open(img_path)
+
+        if os.path.splitext(os.path.basename(img_path))[1].lower() in ['.tif', '.tiff']:
+            new_size = (int(img.size[0] * 0.5), int(img.size[1] * 0.5))
+            img = img.resize(new_size)
+
         img.save(output_filename, dpi=(dpi, dpi))
         return True, output_filename, None, None, None
     except Exception as e:
@@ -356,19 +369,17 @@ def file_format_convert(img_path, to_format, dpi=300):
 def pipeline_file_format_convert(df_files, TRANSFORM_FILE_PNG, N_CPU,
                                  to_format):
     '''
-    png->jpg or jpg->png
+    convert_formats to png conversion
     '''
-    if to_format not in ["png", "jpg"]:
+    convert_formats = ['.tiff', '.tif', '.jpg']
+    if to_format not in ["png"]:
         raise Exception(
-            f"Invalid format '{to_format}' needs to be 'png' or 'jpg'")
-    from_format = {
-        "png": ".jpg",
-        "jpg": ".png"
-    }[to_format]
+            f"Invalid format '{to_format}' needs to be 'png'")
 
-    return convert_file_format(file_format_convert, df_files,
-                               df_files.extension == from_format,
-                               from_format[1:],
+    return convert_file_format(file_format_convert,
+                               df_files,
+                               df_files.extension.isin(convert_formats),
+                               convert_formats,
                                to_format, N_CPU, out_file=TRANSFORM_FILE_PNG,
                                ignore_errors=True)
 
@@ -397,13 +408,13 @@ def create_raw_scaling(file_path, img_converted_8bit,
             RAW_SCALINGS_DIR = f"{os.path.split(file_path)[0]}/"
 
         to_format = 'tiff'
-        master_copy = f"{RAW_SCALINGS_DIR}{filename_wo_extension}_master_copy.{to_format}"
-        production_master = f"{RAW_SCALINGS_DIR}{filename_wo_extension}_production_master.{to_format}"
+        master_copy = f"{RAW_SCALINGS_DIR}{filename_wo_extension}_MC.{to_format}"
+        production_master = f"{RAW_SCALINGS_DIR}{filename_wo_extension}_PM.{to_format}"
         imageio.imsave(master_copy, img_converted_16bit)
         imageio.imsave(production_master, img_converted_16bit)
 
         to_format = 'jpg'
-        access_copy = f"{RAW_SCALINGS_DIR}{filename_wo_extension}_access_copy.{to_format}"
+        access_copy = f"{RAW_SCALINGS_DIR}{filename_wo_extension}_AC.{to_format}"
         imageio.imsave(access_copy, img_converted_8bit)
 
         return True, Path(master_copy), Path(production_master), Path(

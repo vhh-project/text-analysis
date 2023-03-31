@@ -122,134 +122,133 @@ def return_best_binarization_parameters(gridsearch_result, plot=False):
         return False, tmp
 
 
-def grid_search_adaptive_binarization(img_path, cv_adaptive_sizes=[15, 25],
-                                      cv_adaptive_cs=[10],
-                                      cv_adaptive_methods=[0], output=False,
-                                      eval_method='mlc', ground_truth_path=None,
-                                      tess_lang='eng', tess_config=''):
-    '''
-    try each size and C value to find best adaptive binarization params
-    eval_method = [mlc, wer]
-    evaluation measurement = WORD ERROR RATE
-    return dict of results
-    '''
-    eval_methods = ['mlc', 'wer']
-    if eval_method not in eval_methods:
-        raise Exception(
-            f"Invalid eval_method: {eval_method}. Must be one of {eval_methods}")
-    if ground_truth_path is None and eval_method == 'wer':
-        raise Exception(
-            'Please provide a gound truth text if evaluation method == wer')
-    if eval_method == 'wer':
-        ground_truth = open(ground_truth_path, 'r').read()
-    else:
-        ground_truth = None
+# def grid_search_adaptive_binarization(img_path, cv_adaptive_sizes=[15, 25],
+#                                       cv_adaptive_cs=[10],
+#                                       cv_adaptive_methods=[0], output=False,
+#                                       eval_method='mlc', ground_truth_path=None,
+#                                       tess_lang='eng', tess_config=''):
+#     '''
+#     try each size and C value to find best adaptive binarization params
+#     eval_method = [mlc, wer]
+#     evaluation measurement = WORD ERROR RATE
+#     return dict of results
+#     '''
+#     eval_methods = ['mlc', 'wer']
+#     if eval_method not in eval_methods:
+#         raise Exception(
+#             f"Invalid eval_method: {eval_method}. Must be one of {eval_methods}")
+#     if ground_truth_path is None and eval_method == 'wer':
+#         raise Exception(
+#             'Please provide a gound truth text if evaluation method == wer')
+#     if eval_method == 'wer':
+#         ground_truth = open(ground_truth_path, 'r').read()
+#     else:
+#         ground_truth = None
 
-    '''gridsearch & evaluation data collection'''
-    log_once = True  # only log the time once to estimate the runtime time
-    gridsearch_result = []
-    for method in cv_adaptive_methods:
-        for c in cv_adaptive_cs:
-            for size in cv_adaptive_sizes:
-                start_time = time.time()
-                img_bin_adapt = adaptive_binary(img_path, size, c, method)
-                df_data = tesseract_extract_dataframe(img_bin_adapt,
-                                                      lang=tess_lang,
-                                                      config=tess_config)
+#     '''gridsearch & evaluation data collection'''
+#     log_once = True  # only log the time once to estimate the runtime time
+#     gridsearch_result = []
+#     for method in cv_adaptive_methods:
+#         for c in cv_adaptive_cs:
+#             for size in cv_adaptive_sizes:
+#                 start_time = time.time()
+#                 img_bin_adapt = adaptive_binary(img_path, size, c, method)
+#                 df_data = tesseract_extract_dataframe(img_bin_adapt,
+#                                                       lang=tess_lang,
+#                                                       config=tess_config)
 
-                if eval_method == 'mlc':
-                    length, text, measure = image_to_data_stats(df_data,
-                                                                output=False)
-                elif eval_method == 'wer':
-                    hypothesis = ' '.join(
-                        df_data[df_data['text'].notnull()].text.to_list())
-                    length, _, _ = image_to_data_stats(df_data, output=False)
-                    measure = word_error_rate(ground_truth, hypothesis)
-                else:
-                    assert False
+#                 if eval_method == 'mlc':
+#                     length, text, measure = image_to_data_stats(df_data,
+#                                                                 output=False)
+#                 elif eval_method == 'wer':
+#                     hypothesis = ' '.join(
+#                         df_data[df_data['text'].notnull()].text.to_list())
+#                     length, _, _ = image_to_data_stats(df_data, output=False)
+#                     measure = word_error_rate(ground_truth, hypothesis)
+#                 else:
+#                     assert False
 
-                gridsearch_result.append({'length': length,
-                                          eval_method: measure,
-                                          'size': size,
-                                          'c': c,
-                                          'method': method})
+#                 gridsearch_result.append({'length': length,
+#                                           eval_method: measure,
+#                                           'size': size,
+#                                           'c': c,
+#                                           'method': method})
 
-                time_end = round((time.time() - start_time), 2)
-                if log_once:
-                    cv_iterations = len(cv_adaptive_sizes) * len(
-                        cv_adaptive_cs) * len(cv_adaptive_methods)
-                    time_estimation = cv_iterations * time_end / 60
-                    logger.info(
-                        f"eval_method: {eval_method}, iterations: {cv_iterations}, est. time(min): {time_estimation:.2f}")
-                    log_once = False
-                if output:
-                    logger.info(
-                        f"Method: {method}, size: {size}, c: {c}, {eval_method}: {measure}, time: {time_end}")
+#                 time_end = round((time.time() - start_time), 2)
+#                 if log_once:
+#                     cv_iterations = len(cv_adaptive_sizes) * len(
+#                         cv_adaptive_cs) * len(cv_adaptive_methods)
+#                     time_estimation = cv_iterations * time_end / 60
+#                     logger.info(
+#                         f"eval_method: {eval_method}, iterations: {cv_iterations}, est. time(min): {time_estimation:.2f}")
+#                     log_once = False
+#                 if output:
+#                     logger.info(
+#                         f"Method: {method}, size: {size}, c: {c}, {eval_method}: {measure}, time: {time_end}")
 
-    '''evaluate and return dict, best_index, best params'''
-    if eval_method == 'mlc':
-        best_idx, best_params = return_best_binarization_parameters(
-            gridsearch_result)
-        if not best_idx:
-            best_idx, best_params = max(enumerate(gridsearch_result),
-                                        key=lambda item: item[1][eval_method])
-    elif eval_method == 'wer':
-        best_idx, best_params = min(enumerate(gridsearch_result),
-                                    key=lambda item: item[1][eval_method])
-    else:
-        assert False
+#     '''evaluate and return dict, best_index, best params'''
+#     if eval_method == 'mlc':
+#         best_idx, best_params = return_best_binarization_parameters(gridsearch_result)
+#         if not best_idx:
+#             best_idx, best_params = max(enumerate(gridsearch_result),
+#                                         key=lambda item: item[1][eval_method])
+#     elif eval_method == 'wer':
+#         best_idx, best_params = min(enumerate(gridsearch_result),
+#                                     key=lambda item: item[1][eval_method])
+#     else:
+#         assert False
 
-    return gridsearch_result, best_idx, best_params
-
-
-def collect_binarization_gs_data(file_path, line_height_px, cv_adaptive_cs,
-                                 cv_adaptive_methods, cv_dynamic_size_ranges,
-                                 eval_method='mlc', ground_truth_path=None,
-                                 tess_lang='eng', tess_config=''):
-    '''
-    collect & format data from for adaptive binarization
-    file_path - path to file
-    bin parameters
-        line_height_px: determines gridsizes
-        cv_adaptive_cs
-        cv_adaptive_methods
-    return list results
-        all results (optional)
-        best adaptive binarization settings
-    '''
-    try:
-        output = False
-        cv_adaptive_sizes = create_dynamic_bin_size_range(line_height_px,
-                                                          ranges=cv_dynamic_size_ranges)
-        gs_result, best_idx, best_params = grid_search_adaptive_binarization(
-            file_path,
-            cv_adaptive_sizes,
-            cv_adaptive_cs,
-            cv_adaptive_methods,
-            output=output,
-            eval_method=eval_method,
-            ground_truth_path=ground_truth_path,
-            tess_lang=tess_lang, tess_config=tess_config)
-        result_row = [file_path]
-        result_row.extend(list(best_params.values()))
-        result_row.extend([cv_adaptive_sizes, line_height_px])
-
-    except Exception as e:
-        logger.warning(f"error collecting gs-data: {e}")
-        result_row = [file_path] + [np.nan] * 7
-    return result_row
+#     return gridsearch_result, best_idx, best_params
 
 
-def get_best_gs(gs_result_dict):
-    '''
-    param = return-data[0] from grid_search_adaptive_binarization function
-    new metric: length x mlc as best index
-    '''
-    tmp = pd.DataFrame(gs_result_dict)
-    tmp['mlcXlen'] = tmp.mlc * tmp.length
-    max_index = tmp['mlcXlen'].idxmax()
-    best_row = tmp[tmp.index == max_index]
-    return best_row
+# def collect_binarization_gs_data(file_path, line_height_px, cv_adaptive_cs,
+#                                  cv_adaptive_methods, cv_dynamic_size_ranges,
+#                                  eval_method='mlc', ground_truth_path=None,
+#                                  tess_lang='eng', tess_config=''):
+#     '''
+#     collect & format data from for adaptive binarization
+#     file_path - path to file
+#     bin parameters
+#         line_height_px: determines gridsizes
+#         cv_adaptive_cs
+#         cv_adaptive_methods
+#     return list results
+#         all results (optional)
+#         best adaptive binarization settings
+#     '''
+#     try:
+#         output = False
+#         cv_adaptive_sizes = create_dynamic_bin_size_range(line_height_px,
+#                                                           ranges=cv_dynamic_size_ranges)
+#         gs_result, best_idx, best_params = grid_search_adaptive_binarization(
+#             file_path,
+#             cv_adaptive_sizes,
+#             cv_adaptive_cs,
+#             cv_adaptive_methods,
+#             output=output,
+#             eval_method=eval_method,
+#             ground_truth_path=ground_truth_path,
+#             tess_lang=tess_lang, tess_config=tess_config)
+#         result_row = [file_path]
+#         result_row.extend(list(best_params.values()))
+#         result_row.extend([cv_adaptive_sizes, line_height_px])
+
+#     except Exception as e:
+#         logger.warning(f"error collecting gs-data: {e}")
+#         result_row = [file_path] + [np.nan] * 7
+#     return result_row
+
+
+# def get_best_gs(gs_result_dict):
+#     '''
+#     param = return-data[0] from grid_search_adaptive_binarization function
+#     new metric: length x mlc as best index
+#     '''
+#     tmp = pd.DataFrame(gs_result_dict)
+#     tmp['mlcXlen'] = tmp.mlc * tmp.length
+#     max_index = tmp['mlcXlen'].idxmax()
+#     best_row = tmp[tmp.index == max_index]
+#     return best_row
 
 
 def extract_text_from_image(file, size, c, method, sym_spell=False,
@@ -442,10 +441,6 @@ def single_hocr_extract(file, bin_size, bin_c, bin_method,
     file: path to img
     temp save with unique filenames - multiproc may overwrite otherwise
     '''
-    # file not extractable (eg. no content - plain white page)
-    if bin_size is False:
-        return file, None, 0, None
-
     if not HOCR_DIR:
         HOCR_DIR = ""
 
@@ -454,6 +449,7 @@ def single_hocr_extract(file, bin_size, bin_c, bin_method,
     to_img_path_bin = f"{outfile_basename}_bin.png"
 
     # resize
+    logger.info(f"resize parameters: width {width_resized}, height {height_resized}")
     img = open_pil_image(original).convert('L').resize((width_resized, height_resized))
 
     # rotate
@@ -461,7 +457,8 @@ def single_hocr_extract(file, bin_size, bin_c, bin_method,
         img = img.rotate(straight_angle, expand=True)
 
     # binarize
-    if bin_size != 0:
+    if bin_size:
+        logger.info(f"binarization parameters: {bin_size}, {bin_c}, {bin_method}")
         img_bin = adaptive_binary(img, bin_size, bin_c, bin_method)
         img = Image.fromarray(img_bin)
     # save
@@ -531,8 +528,9 @@ def pipeline_hocr_extract(data, HOCR_DIR, HOCR_RESULTS_PATH, N_CPU,
     return data
 
 
-def pipeline_hocr_add_spellcorrection(data, sym_spell, repeated_words_list=[],
-                                      bert_model=False,
+def pipeline_hocr_add_spellcorrection(data, 
+                                      sym_spell, 
+                                      repeated_words_list=[], 
                                       dict_enchant="en_US"):
     '''add spell correction to each ocr entry page'''
     def convert_single(row):
@@ -542,7 +540,6 @@ def pipeline_hocr_add_spellcorrection(data, sym_spell, repeated_words_list=[],
             entries = pd.DataFrame.from_dict(row.entries)
             entries = add_spelling_correction_to_dataframe(entries, sym_spell,
                                                            repeated_words_list,
-                                                           bert_model,
                                                            dict_enchant)
             return entries.to_dict()
         except Exception as e:
@@ -700,10 +697,11 @@ def merge_multiple_pdf_fitz(files_to_merge: list, out_file):
     sys.argv[1:] = saved_parms  # restore original parameters
 
 
-def create_single_pdf(data, out_path):
+def create_single_pdf(data, out_path,title=None):
     # create output file
     pdf = canvas.Canvas(str(out_path))
-    title = os.path.splitext(os.path.split(str(out_path))[1])[0]
+    if title == None:
+        title = os.path.splitext(os.path.split(str(out_path))[1])[0]
     pdf.setTitle(title)
     pdf.setAuthor("BOW - Batch OCR Webservice")
     pdf.setSubject("Created by BOW - Batch OCR Webservice")
@@ -715,10 +713,8 @@ def create_single_pdf(data, out_path):
         logger.info(f"Creating pdf page {i} width: {row.width_resized}, height: {row.height_resized}")
 
         # insert document background
-        temporary_image = f"{os.path.splitext(row.file_original)[0]}_tmp_.jpg"
-        Image.open(row.file_original).convert('RGB').save(temporary_image)
         pdf.setPageSize((row.width_resized, row.height_resized))
-        pdf.drawImage(temporary_image, 0, 0, width=row.width_resized, height=row.height_resized)
+        pdf.drawImage(row.file_original, 0, 0, width=row.width_resized, height=row.height_resized)
 
         entries = pd.DataFrame.from_dict(row.entries)
 

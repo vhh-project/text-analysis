@@ -70,6 +70,7 @@
             <th scope="col">Pages</th>
             <th scope="col">Queued</th>
             <th scope="col">Processing</th>
+            <th scope="col">Storage</th>
         </tr>
         {% for user,stats in user_stats.items %}
         <tr>
@@ -79,6 +80,7 @@
             <td scope="row">{{ stats.2 }}</td>
             <td scope="row">{{ stats.3 }}</td>
             <td scope="row">{{ stats.4 }}</td>
+            <td scope="row">{{ stats.5 }}</td>
         </tr>
         {% endfor %}
     </table>

@@ -153,12 +153,27 @@ ul.no-bullets {
     margin: 0;
 }
 
-.group-header i{
+.group-snap-in{
     cursor: pointer;
     float:right;
     color:gray;
+    padding: 3px;
 }
 
+.group-edit{
+    cursor: pointer;
+    color:gray;
+    padding: 3px;
+}
+
+.equal-height-btn {
+    height: 36px;
+    line-height: 0px;
+}
+.dz-disable {
+    pointer-events: none;
+    cursor: default;
+}
 .dropzone{
     border:4px dotted gray;
     border-radius: 15px;
@@ -251,7 +266,7 @@ ul.no-bullets {
     line-height: 1.0;
     border-radius: 2px;
     border: 1px solid transparent;
-    text-align: center;
+    text-align: left;
 }
 .outer-text-holder.active, .outer-text-holder:hover{
     background-color:#0000ff21;
@@ -261,6 +276,7 @@ ul.no-bullets {
     font-size: 12px;
     letter-spacing: 0px;
     font-family: Arial;
+    display: inline-block; 
 }
 
 .correction-tooltip, .correction-tooltip-alt{

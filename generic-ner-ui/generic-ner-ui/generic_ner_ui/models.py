@@ -24,6 +24,11 @@ class Run(models.Model):
     page_count = models.IntegerField(null=True)
     review_complete = models.IntegerField(null=True, default=False)
     pdf_uptodate = models.IntegerField(null=True, default=True)
+    latest_review_date = models.DateTimeField(null=True)
+    finish_date = models.DateTimeField(null=True)
+    marked_complete = models.IntegerField(null=True, default=False)
+    has_tiff = models.IntegerField(null=True, default=False)
+    folder_size = models.IntegerField(null=True, default=False)
 
     result_data = models.OneToOneField(
         RunResult,

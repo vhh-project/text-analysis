@@ -1,64 +1,49 @@
-# gen-ner-ui-umbrella
+# BOW - Batch OCR Webservice
 
-### fetch submodules
-1. clone project and fetch submodules
-   1. ocr-pipeline 
-   2. generic-ner-ui
-   3. generic-ner-ui_headless
-```
-git submodule init
-git submodule update
-```
 
-### platform support
-- check system architecture: ```$ arch```
-```yaml
-BOW_ARCH=$(arch)
-echo $BOW_ARCH
-## x86_64
-## arm64
-```
-
-### build & run locally
+### quick launch
 1. start all containers
 ```bash
 BOW_ARCH=$(arch)
-echo $BOW_ARCH
+docker-compose -f docker-compose.$BOW_ARCH.yml up --build
+# or run:
 docker-compose -f docker-compose.$BOW_ARCH.yml up --build rabbitmq postgres database minio keycloak generic-ner-ui ocr-pipeline
 ```
 2. http://localhost:8080/auth/
-   1. create testuser/testuser
-   2. copy public key
-   3. update *CONFIG_KEYCLOAK_PUBLIC_KEY* in *docker-compose.yml* 
+   1. create a test user
+   2. copy/paste public key & into *CONFIG_KEYCLOAK_PUBLIC_KEY* in *docker-compose.yml* 
 3. restart containers
-   1. in case of re-start – without *--build* parameter
 4. http://localhost:8000/bow/main/
-   1. Welcome to BOW 👋
-   
+5. Welcome to BOW 👋
+
+
+### platform support
+set system architecture variable to chose arch related yaml file:
+```bash
+BOW_ARCH=$(arch)
+# x86_64 / arm64
+```
+
+
+### sub services
+| service                 | description                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| generic-ner-ui          | BOW user interface for data upload and retrieval, push tasks into rabbitmq queue |
+| keycloak                | user management for generic-ner-ui                                               |
+| minio                   | object storage, retrieve data from ocr_pipeline, provide data to generic-ner-ui  |
+| rabbitmq                | manage tasks from generic-ner-ui                                                 |
+| ocr_pipeline            | process tasks from rabbitmq queue; read/write data from minio; OCR images        |
+| mysql                   | stores generic-ner-ui task metadata                                              |
+| postgres                | stores keycloak users                                                            |
+
 
 <div style="page-break-before:always"></div>
 
 
+# Server Configuration
 
-# CVL Server Configuration
-
-### services running on CVL
-| service        | port  | access               | access        | domain                            | description                                                                      |
-| -------------- | ----- | -------------------- | ------------- | --------------------------------- | -------------------------------------------------------------------------------- |
-| generic-ner-ui | 8000  | all users            | public        | bow.vhh.cvl.tuwien.ac.at/bow/main/| BOW user interface for data upload and retrieval, push tasks into rabbitmq queue |
-| keycloak       | 8080  | ingo & admin | public        | auth.bow.vhh.cvl.tuwien.ac.at     | user management for generic-ner-ui                                               |
-| minio          | 9000  | wireguard configs       | WireGuard vpn | minio.vhh.cvl.tuwien.ac.at        | object storage, retrieve data from ocr_pipeline, provide data to generic-ner-ui  |
-| rabbitmq       | 15672 | wireguard configs       | WireGuard vpn | rabbitmq.vhh.cvl.tuwien.ac.at     | manage tasks from generic-ner-ui                                                 |
-| ocr_pipeline   | -     | -                    | -             | -                                 | process tasks from rabbitmq queue; read/write data from minio                    |
-| mysql          | 3306  | -                    | -             | -                                 | stores generic-ner-ui task metadata                                              |
-| postgres       | 5432  | -                    | -             | -                                 | stores keycloak users                                                            |
-
-
-### update git project & run on CVL
+### update & run BOW on Server via ssh
 ```bash
-### connect
-ssh cvl
-
 ### BOW – DBS (5 containers)
 tmux a -t cli-session
 cd /home/project/generic-ner-ui-umbrella
@@ -79,16 +64,15 @@ docker-compose -f docker-compose.x86_64.yml up ocr-pipeline
 ```
 
 
-### git authenticate
+### git authenticate on server
 ```bash
 git pull
-# _name_
-# _token_
+# _name_ & _token_
 # login enter token git: settings > developer > token classic > (re)generate > paste
 ```
 
 
-### tmux sessions 
+### three tmux sessions are running BOW
 ```bash
 ## create new session
 tmux new -s cli-session
@@ -111,47 +95,4 @@ tmux ls
 Ctrl+b d or Ctrl+b :detach
 ```
 
-
-### storage attached to containers
-```bash
-df -h /data
-# /dev/mapper/bowdata-data  590G  121G  439G  22% /data
-
-docker system df -v
-# ...
-# generic-ner-ui-umbrella_dbdata         1     54.4MB
-# generic-ner-ui-umbrella_migrations     1     6.211kB
-# generic-ner-ui-umbrella_miniodata      1     99.34GB
-# generic-ner-ui-umbrella_nerdbdata      1     1.918GB
-```
-
-
-### wireguard configuration(s)
-directory:
-```bash
-ls /home/project/wireguard
-# jweber_bow.conf
-# izechner_bow.conf
-```
-
-
-### adapting the yaml file
-**docker-compose.x86_64.yml**
-```yaml
-# run localhost
-- CONFIG_KEYCLOAK_HOST=localhost:8080
-- CONFIG_KEYCLOAK_ACCESS_HOST=keycloak:8080
-
-# run live on cvl
-- CONFIG_KEYCLOAK_HOST=auth.bow.vhh.cvl.tuwien.ac.at
-- CONFIG_KEYCLOAK_ACCESS_HOST=keycloak:8080
-- PROXY_ADDRESS_FORWARDING=true
-- REDIRECT_SOCKET=proxy-https
-- KEYCLOAK_FRONTEND_URL=https://auth.bow.vhh.cvl.tuwien.ac.at/auth
-
-# on any deployment update after first keycloak run:
-- CONFIG_KEYCLOAK_PUBLIC_KEY=...
-```
-
----
-
+***
